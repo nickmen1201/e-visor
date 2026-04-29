@@ -672,9 +672,11 @@ with tab1:
         ax.text(v + 0.01, i, f'{v:.2f}', va='center', fontsize=10)
     ax.set_xlim(0, max(1.0, lf_bloque.max() * 1.15))
     ax.set_title('LF por bloque (promedio del período)', loc='left')
-    ax.set_xlabel('Factor de carga (adimensional)')
+    ax.set_xlabel('0 = picos extremos · 1 = consumo plano')
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
+    st.plotly_chart(graficar_serie_diaria(ind_f, 'LF', 'LF (adimensional)'),
+                    use_container_width=True)
 
     # ── PAR ──────────────────────────────────────────────────────────────────
     st.subheader("PAR — Peak to Average Ratio")
@@ -868,48 +870,62 @@ with tab2:
     st.pyplot(fig); plt.close(fig)
 
     # ── KPI 05 ───────────────────────────────────────────────────────────────
-    st.subheader("KPI 05 — Emisiones CO₂ acumuladas")
+    st.subheader("KPI 05 — Emisiones CO₂ acumuladas vs. meta")
     actual_diario = kpi_f.groupby('fecha')['KPI05_CO2_tCO2e'].sum().sort_index()
     actual_acum   = actual_diario.cumsum()
+    anterior_acum = actual_acum * 1.10   # estimado sin línea base histórica real
+    meta_acum     = anterior_acum * 0.97  # meta −3% (Ley 2169/2021)
     fig, ax = plt.subplots(figsize=(11, 4))
-    ax.plot(actual_acum.index, actual_acum.values, color=C_AMBER, linewidth=2)
-    ax.fill_between(actual_acum.index, actual_acum.values, alpha=0.15, color=C_AMBER)
-    ax.set_title('KPI 05 — Emisiones CO₂ acumuladas en el período', loc='left')
+    ax.plot(actual_acum.index, anterior_acum.values,
+            color=C_GRAY, linewidth=2, label='Período equiv. año anterior (estimado)')
+    ax.plot(actual_acum.index, actual_acum.values,
+            color=C_AMBER, linewidth=2.5, marker='o', markersize=4, label='Período actual')
+    ax.plot(actual_acum.index, meta_acum.values,
+            color=C_PURPLE, linewidth=1.5, linestyle='--', label='Meta −3% (Ley 2169)')
+    ax.set_title('KPI 05 — Emisiones CO₂ acumuladas vs. meta', loc='left')
     ax.set_ylabel('tCO₂e acumuladas')
+    ax.legend(frameon=False, loc='upper left')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
     fig.autofmt_xdate(); plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
+    st.caption("Año anterior: estimado (+10% sobre período actual). "
+               "Reemplazar con línea base real (ISO 50001 Anexo B) cuando esté disponible.")
 
     # ── KPI 08 ───────────────────────────────────────────────────────────────
-    st.subheader("KPI 08 — Load Factor")
-    lf_bloque = kpi_f.groupby('entity_id')['KPI08_LF'].mean().sort_values()
+    st.subheader("KPI 08 — Load Factor (cumplimiento del umbral LF ≥ 0,65)")
     UMBRAL_LF = 0.65
-    colores = [C_TEAL if v >= UMBRAL_LF else C_AMBER for v in lf_bloque]
-    fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(lf_bloque))))
-    ax.barh(lf_bloque.index.astype(str), lf_bloque.values, color=colores, edgecolor='none')
-    ax.axvline(UMBRAL_LF, color='#5F5E5A', linestyle='--', linewidth=1)
-    ax.text(UMBRAL_LF, len(lf_bloque) - 0.4, f' umbral {UMBRAL_LF}',
-            ha='left', va='bottom', fontsize=10, color='#5F5E5A')
-    for i, v in enumerate(lf_bloque.values):
-        ax.text(v + 0.01, i, f'{v:.2f}', va='center', fontsize=10)
-    ax.set_xlim(0, max(1.0, lf_bloque.max() * 1.15))
-    ax.set_title('KPI 08 — Load Factor por bloque', loc='left')
-    ax.set_xlabel('Factor de carga (adimensional)')
+    cumplimiento_lf = (kpi_f.groupby('entity_id')
+                       .apply(lambda g: (g['KPI08_LF'] >= UMBRAL_LF).mean() * 100)
+                       .sort_values())
+    colores = [C_TEAL if v >= 50 else C_AMBER for v in cumplimiento_lf]
+    fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(cumplimiento_lf))))
+    ax.barh(cumplimiento_lf.index.astype(str), cumplimiento_lf.values,
+            color=colores, edgecolor='none')
+    for i, v in enumerate(cumplimiento_lf.values):
+        ax.text(v + 0.5, i, f'{v:.0f}%', va='center', fontsize=10)
+    ax.set_xlim(0, 115)
+    ax.set_title('KPI 08 — % de días con LF ≥ 0,65 por bloque', loc='left')
+    ax.set_xlabel('% de días en cumplimiento · Verde ≥ 50% · Ámbar < 50%')
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
 
     # ── KPI 09 ───────────────────────────────────────────────────────────────
     st.subheader("KPI 09 — Índice de consumo nocturno")
-    f4_bloque = kpi_f.groupby('entity_id')['KPI09_f4_pct'].mean().sort_values()
-    UMBRAL_F4 = 20.0
-    colores = [C_RED if v > UMBRAL_F4 else C_TEAL for v in f4_bloque]
+    f4_bloque = kpi_f.groupby('entity_id')['KPI09_f4_pct'].mean().sort_values(ascending=False)
+    colores = [C_RED if v > 20 else (C_AMBER if v > 10 else C_TEAL) for v in f4_bloque]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(f4_bloque))))
     ax.barh(f4_bloque.index.astype(str), f4_bloque.values, color=colores, edgecolor='none')
-    ax.axvline(UMBRAL_F4, color='#5F5E5A', linestyle='--', linewidth=1)
+    ax.axvline(10, color=C_TEAL, linestyle='--', linewidth=1)
+    ax.axvline(20, color=C_RED,  linestyle='--', linewidth=1)
+    ax.text(10, len(f4_bloque) - 0.3, ' objetivo 10%',
+            ha='left', va='bottom', fontsize=9, color=C_TEAL)
+    ax.text(20, len(f4_bloque) - 0.3, ' alerta 20%',
+            ha='left', va='bottom', fontsize=9, color=C_RED)
     for i, v in enumerate(f4_bloque.values):
         ax.text(v + 0.3, i, f'{v:.1f}%', va='center', fontsize=10)
+    ax.set_xlim(0, max(f4_bloque.max() * 1.15, 25))
     ax.set_title('KPI 09 — Consumo nocturno por bloque', loc='left')
-    ax.set_xlabel('% de energía consumida entre 22:00–06:59')
+    ax.set_xlabel('% energía 22:00–07:00 · Verde < 10% · Ámbar 10–20% · Rojo > 20%')
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
 
