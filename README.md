@@ -1,12 +1,12 @@
 # e-visor
 
-![Python](https://img.shields.io/badge/Python-3776ab?style=flat-square&logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)
-![Jupyter](https://img.shields.io/badge/Jupyter-F37726?style=flat-square&logo=jupyter&logoColor=white)
-![Pandas](https://img.shields.io/badge/Pandas-150458?style=flat-square&logo=pandas&logoColor=white)
-![NumPy](https://img.shields.io/badge/NumPy-013243?style=flat-square&logo=numpy&logoColor=white)
-![Matplotlib](https://img.shields.io/badge/Matplotlib-11557c?style=flat-square&logo=python&logoColor=white)
-![Plotly](https://img.shields.io/badge/Plotly-3F4F75?style=flat-square&logo=plotly&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.0-red)
+![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange)
+![Pandas](https://img.shields.io/badge/Pandas-2.x-purple)
+![NumPy](https://img.shields.io/badge/NumPy-2.x-blue)
+![Matplotlib](https://img.shields.io/badge/Matplotlib-3.x-green)
+![Plotly](https://img.shields.io/badge/Plotly-5.x-lightgrey)
 
 E-visor es un proyecto de análisis y visualización energética para el **Ecocampus UPB**. Integra datos crudos del medidor inteligente, calcula indicadores y KPIs energéticos, y los expone en un dashboard interactivo de Streamlit.
 
