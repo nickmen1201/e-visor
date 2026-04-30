@@ -23,8 +23,8 @@ El proyecto tiene una cadena funcional notebook → CSV → dashboard. Conviven 
 
 - `2026/limpieza_datos.ipynb`: preparación y saneamiento de los datos crudos del medidor.
 - `2026/calculo_indicadores_kpis_2026.ipynb`: cálculo de indicadores y KPIs diarios.
-- `2026/visualizaciones_evisor.ipynb`: visualizaciones aprobadas en la fase A2.3.
-- `2026/dashboard.py`: dashboard final en Streamlit, organizado en dos pestañas (Indicadores y KPIs).
+- `2026/visualizaciones_evisor.ipynb`: espacio modular para probar nuevas formas de visualización de forma simple y rápida.
+- `2026/dashboard.py`: implementación completa del dashboard en Streamlit, organizada en dos pestañas (Indicadores y KPIs).
 
 ### Indicadores en el dashboard
 
@@ -55,16 +55,13 @@ El proyecto tiene una cadena funcional notebook → CSV → dashboard. Conviven 
 
 La lógica prioriza la validez operativa: no se aplica eliminación de valores atípicos porque esos puntos pueden reflejar eventos reales relevantes para la gestión energética.
 
-### 3. Visualización analítica
+### 3. Visualización exploratoria
 
-`2026/visualizaciones_evisor.ipynb` documenta las visualizaciones aprobadas:
-
-- Celdas 1–12: indicadores (carga `indicadores_diarios.csv` en celda 1).
-- Celdas 13–21: KPIs (carga `kpis_diarios.csv` en celda 13).
+`2026/visualizaciones_evisor.ipynb` se usa como laboratorio de visualización modular. Su objetivo actual es probar nuevas representaciones de forma sencilla, reutilizando los CSV ya calculados y permitiendo iterar rápido sobre alternativas gráficas antes de decidir qué llevar al producto final.
 
 ### 4. Dashboard operativo
 
-`2026/dashboard.py` es la interfaz final. Organiza la vista en pestañas de Indicadores y KPIs, incluye widgets específicos para f4 y CO2, y compara valores recientes contra el mismo día de la semana anterior.
+`2026/dashboard.py` contiene la implementación completa del dashboard en Streamlit. Organiza la vista en pestañas de Indicadores y KPIs, incluye widgets específicos para f4 y CO2, y compara valores recientes contra el mismo día de la semana anterior.
 
 
 ## Estructura Del Proyecto
