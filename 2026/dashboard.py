@@ -39,9 +39,7 @@ TON_CO2_POR_VUELO_MDE_BOG = 0.18        # tCO₂e / trayecto
 TON_CO2_POR_VEHICULO_ANO  = 4.6         # tCO₂e / vehículo·año (IPCC)
 
 REF_LF  = 0.65
-REF_PAR = round(1 / REF_LF, 2)          # ≈ 1.54 — inverso de REF_LF
 
-UMBRAL_DB  = 2.0   # % — Desbalance de tensión  (KPI 10)
 UMBRAL_FP  = 0.9   # adimensional — Factor de potencia (KPI 11)
 UMBRAL_THD = 5.0   # % — THD-V (KPI 12)
 
@@ -259,13 +257,6 @@ def graficar_evidencia_f2(comp):
                            xref='paper', yref='paper', showarrow=False)
         return fig
     p = comp['perfil']
-    xs = list(p.index) + list(p.index[::-1])
-    ys = ([comp['prom'] + comp['std']] * len(p) +
-          [comp['prom'] - comp['std']] * len(p))
-    fig.add_trace(go.Scatter(x=xs, y=ys, fill='toself',
-                              fillcolor='rgba(55,138,221,0.15)',
-                              line=dict(color='rgba(0,0,0,0)'),
-                              name=f'±σ = {comp["std"]:.0f} W (num.)'))
     fig.add_trace(go.Scatter(x=p.index, y=p.values, mode='lines+markers',
                               showlegend=False,
                               line=dict(color=C_TEAL, width=2),
@@ -275,9 +266,11 @@ def graficar_evidencia_f2(comp):
                        text=f'P̄ = {comp["prom"]:.0f} W (den.)',
                        showarrow=False, xanchor='right', yanchor='bottom',
                        font=dict(size=11, color=C_AMBER))
-    fig = _base_perfil_layout(fig)
-    fig.update_layout(legend=dict(orientation='h', y=1.05, x=0, font=dict(size=10)))
-    return fig
+    fig.add_annotation(x=p.index[0], y=comp['prom'] + comp['std'], xref='x', yref='y',
+                       text=f'σ = {comp["std"]:.0f} W (num.)',
+                       showarrow=False, xanchor='left', yanchor='bottom',
+                       font=dict(size=11, color=C_BLUE))
+    return _base_perfil_layout(fig)
 
 
 def graficar_evidencia_f3(comp):
@@ -703,12 +696,8 @@ with tab1:
     # ── LF — Load Factor ─────────────────────────────────────────────────────
     st.subheader("LF — Factor de carga")
     lf_bloque  = ind_f.groupby('entity_id')['LF'].mean().sort_values()
-    colores_lf = [C_TEAL if v >= REF_LF else C_AMBER for v in lf_bloque]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(lf_bloque))))
-    ax.barh(lf_bloque.index.astype(str), lf_bloque.values, color=colores_lf, edgecolor='none')
-    ax.axvline(REF_LF, color='#5F5E5A', linestyle='--', linewidth=1)
-    ax.text(REF_LF, len(lf_bloque) - 0.4, f' LF = {REF_LF} (ref.)',
-            ha='left', va='bottom', fontsize=10, color='#5F5E5A')
+    ax.barh(lf_bloque.index.astype(str), lf_bloque.values, color=C_TEAL, edgecolor='none')
     for i, v in enumerate(lf_bloque.values):
         ax.text(v + 0.01, i, f'{v:.2f}', va='center', fontsize=10)
     ax.set_xlim(0, max(1.0, lf_bloque.max() * 1.15))
@@ -722,12 +711,8 @@ with tab1:
     # ── PAR — Peak to Average Ratio ──────────────────────────────────────────
     st.subheader("PAR — Peak to Average Ratio")
     par_bloque  = ind_f.groupby('entity_id')['PAR'].mean().sort_values()
-    colores_par = [C_TEAL if v <= REF_PAR else C_AMBER for v in par_bloque]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(par_bloque))))
-    ax.barh(par_bloque.index.astype(str), par_bloque.values, color=colores_par, edgecolor='none')
-    ax.axvline(REF_PAR, color='#5F5E5A', linestyle='--', linewidth=1)
-    ax.text(REF_PAR, len(par_bloque) - 0.4, f' PAR = {REF_PAR} (ref.)',
-            ha='left', va='bottom', fontsize=10, color='#5F5E5A')
+    ax.barh(par_bloque.index.astype(str), par_bloque.values, color=C_TEAL, edgecolor='none')
     for i, v in enumerate(par_bloque.values):
         ax.text(v + 0.02, i, f'{v:.2f}', va='center', fontsize=10)
     ax.set_xlim(1, par_bloque.max() * 1.15)
@@ -816,14 +801,11 @@ with tab1:
 
     # ── HU — Horas de utilización ─────────────────────────────────────────────
     st.subheader("HU — Horas de utilización")
-    REF_HU = REF_LF * 24   # ≈ 15.6 h — equivalente a LF = 0.65
-    hu_bloque = ind_f.groupby('entity_id')['HU_horas'].mean().sort_values()
-    colores_hu = [C_TEAL if v >= REF_HU else C_AMBER for v in hu_bloque]
+    hu_bloque = (ind_f.groupby('entity_id')['HU_horas']
+                 .apply(lambda x: x.clip(upper=24).mean())
+                 .sort_values())
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(hu_bloque))))
-    ax.barh(hu_bloque.index.astype(str), hu_bloque.values, color=colores_hu, edgecolor='none')
-    ax.axvline(REF_HU, color='#5F5E5A', linestyle='--', linewidth=1)
-    ax.text(REF_HU, len(hu_bloque) - 0.4, f' {REF_HU:.1f} h (ref. LF = {REF_LF})',
-            ha='left', va='bottom', fontsize=10, color='#5F5E5A')
+    ax.barh(hu_bloque.index.astype(str), hu_bloque.values, color=C_TEAL, edgecolor='none')
     for i, v in enumerate(hu_bloque.values):
         ax.text(v + 0.2, i, f'{v:.1f} h', va='center', fontsize=10)
     ax.set_xlim(0, 24 * 1.1)
@@ -835,9 +817,11 @@ with tab1:
     # ── CO₂ — Emisiones de carbono ────────────────────────────────────────────
     st.subheader("CO₂ — Huella de carbono del Ecocampus")
     _area_bloques = None  # dict {entity_id: m²} pendiente de Planeación Física UPB
-    st.plotly_chart(graficar_co2_card(ind_f, ind_full=ind), use_container_width=True)
-    st.plotly_chart(graficar_co2_evolucion(ind_f), use_container_width=True)
-    st.plotly_chart(graficar_co2_por_bloque(ind_fechas, area_por_bloque=_area_bloques),
+    _ind_co2      = ind_f[ind_f['HU_horas'] <= 24]          # excluye días con rollover de medidor
+    _ind_full_co2 = ind[ind['HU_horas'] <= 24]
+    st.plotly_chart(graficar_co2_card(_ind_co2, ind_full=_ind_full_co2), use_container_width=True)
+    st.plotly_chart(graficar_co2_evolucion(_ind_co2), use_container_width=True)
+    st.plotly_chart(graficar_co2_por_bloque(_ind_co2, area_por_bloque=_area_bloques),
                     use_container_width=True)
     if _area_bloques is None:
         st.caption("Intensidad de carbono (tCO₂e/m²) no disponible — "
@@ -859,12 +843,8 @@ with tab1:
     st.subheader("Desbalance de tensión")
     serie_db = ind_f.groupby('fecha')['desbalance_pct'].mean().sort_index()
     fig, ax = plt.subplots(figsize=(11, 4))
-    ax.axhspan(UMBRAL_DB, max(serie_db.max() * 1.1, UMBRAL_DB * 1.5), color=C_RED, alpha=0.08)
     ax.plot(serie_db.index, serie_db.values, color=C_PURPLE, linewidth=1.5)
-    ax.axhline(UMBRAL_DB, color=C_RED, linestyle='--', linewidth=1)
-    ax.text(serie_db.index[-1], UMBRAL_DB, f'  umbral {UMBRAL_DB}%',
-            va='center', fontsize=10, color=C_RED)
-    ax.set_ylim(0, max(serie_db.max() * 1.15, UMBRAL_DB * 1.5))
+    ax.set_ylim(0, serie_db.max() * 1.15)
     ax.set_title('Desbalance de tensión — evolución diaria', loc='left')
     ax.set_ylabel('%')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
@@ -915,7 +895,8 @@ with tab2:
 
     # ── KPI 05 — Emisiones de CO₂ (huella de carbono) ────────────────────────
     st.subheader("KPI 05 — Emisiones CO₂ acumuladas vs. meta")
-    actual_diario = kpi_f.groupby('fecha')['KPI05_CO2_tCO2e'].sum().sort_index()
+    actual_diario = (kpi_f[kpi_f['KPI05_CO2_tCO2e'] <= 1.0]   # excluye días con rollover de medidor
+                     .groupby('fecha')['KPI05_CO2_tCO2e'].sum().sort_index())
     actual_acum   = actual_diario.cumsum()
     anterior_acum = actual_acum * 1.10    # estimado: sin línea base histórica real
     meta_acum     = anterior_acum * 0.97  # meta −3% (Ley 2169/2021)
@@ -960,8 +941,8 @@ with tab2:
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
 
-    # ── KPI 09 — Índice de consumo nocturno ──────────────────────────────────
-    st.subheader("KPI 09 — Índice de consumo nocturno")
+    # ── KPI 09 — Índice de consumo no operacional ────────────────────────────
+    st.subheader("KPI 09 — Índice de consumo no operacional")
     f4_bloque  = kpi_f.groupby('entity_id')['KPI09_f4_pct'].mean().sort_values(ascending=False)
     colores_k9 = [C_RED if v > 20 else (C_AMBER if v > 10 else C_TEAL) for v in f4_bloque]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(f4_bloque))))
@@ -975,8 +956,8 @@ with tab2:
     for i, v in enumerate(f4_bloque.values):
         ax.text(v + 0.3, i, f'{v:.1f}%', va='center', fontsize=10)
     ax.set_xlim(0, max(f4_bloque.max() * 1.15, 25))
-    ax.set_title('KPI 09 — Consumo nocturno por bloque', loc='left')
-    ax.set_xlabel('% energía 22:00–07:00 · Verde < 10% · Ámbar 10–20% · Rojo > 20%')
+    ax.set_title('KPI 09 — Consumo no operacional por bloque', loc='left')
+    ax.set_xlabel('% energía 22:00–06:00 · Verde < 10% · Ámbar 10–20% · Rojo > 20%')
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
 
