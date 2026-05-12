@@ -1,104 +1,71 @@
-# e-Visor — Contexto del Proyecto
+# e-Visor — Project Context
 
-Indicadores energéticos y tableros de visualización para **Ecocampus UPB**, bajo criterios **ESG**.
+**Language:** context in English (token efficiency). All user-facing output must be in **Spanish**.
 
-## Objetivos
+**Project:** Energy KPIs and dashboards for Ecocampus UPB (Medellín), ESG-aligned.
+**Phase:** A2 — dashboard design + indicator calculation (infrastructure operational, no automation).
+**Stack:** FIWARE (context broker) · Grafana (dashboards + alerts) · Landis meters (`etsmartmeter`) · Fronius inverter B11 (`etfroniusinverter`) · Enphase inverter B10 (`etenphaseinverter`) · Fronius sensor (`etfroniussensorcard`) · XW inverter (`etinverterxw`, grid export unconfirmed).
+**Constraints:** hourly resolution · per block/building granularity · academic validity required.
 
-1. **Sistema de indicadores de sostenibilidad** — definir y calcular nuevos indicadores (eficiencia energética, sostenibilidad, impacto ambiental) que complementen los existentes, para evaluar el desempeño del Ecocampus y las estrategias implementadas.
-2. **Estrategias de gestión energética** — medidas por segmento: optimización de intensidad energética, reducción de consumo por m², minimización del pico de demanda, integración de renovables.
+## Design Rules
 
-## Fase actual
+- Dashboards: simple, clear, public-facing. Vision: *"campus that speaks in every corner"*.
+- KPIs: immediate per-building diagnostic for decision-makers.
 
-Desarrollo de tableros de visualización e indicadores energéticos (infraestructura ya operativa). Visualización por edificio, tipo de carga y zona; KPIs tradicionales (consumo/m², intensidad energética, pico de demanda) y nuevos orientados a sostenibilidad e impacto ambiental.
+## DEMO_MODE Convention
 
-**Actividades:**
-- A2.1 — Selección e instalación de herramientas de visualización
-- A2.2 — Diseño de tableros interactivos por zona, carga y edificio
-- A2.3 — Definición y cálculo de indicadores energéticos y de sostenibilidad
-- A2.4 — Validación y ajuste con actores institucionales
-- A2.5 — Documentación y manual de uso
+KPIs/indicators blocked by missing data are shown with plausible reference values. Rules:
+- **Code:** tag every affected variable with `# DEMO_MODE: <reason> | ref=<value>`. Remove when real data arrives.
+- **Grafana:** amber/orange panel tint + `⚠ Valor de referencia` suffix in title + tooltip stating what's missing.
+- Goal: a stakeholder must never mistake a reference value for a real measured KPI.
 
-## Marco institucional
+---
 
-**Grupos de interés priorizados:** estudiantes, empleados, sector empresarial, sector social, comunidad, arquidiócesis y diócesis, egresados, donantes y benefactores, sector académico e investigativo, sector público.
+## Indicators (diagnostic, hourly, per block — source: Landis meters unless noted)
 
-**Asuntos materiales priorizados:**
-1. **Liderazgo consciente** — innovación, inversiones, creación de empleo y desarrollo.
-2. **Regeneración y resiliencia** — energías renovables, biodiversidad, gestión de residuos.
-3. **Interés colectivo** — voluntariado, salud mental y bienestar, diversidad e inclusión.
+| ID | Name | Formula | Variables |
+|---|---|---|---|
+| LF | Load Factor | `mean(P) / max(P)` | activepower |
+| PAR | Peak-to-Average Ratio | `max(P) / mean(P)` | activepower |
+| f₁ | Operational uniformity | `mean(P_op) / max(P_op)` · op=06:00–21:59 | activepower |
+| f₂ | Load CV | `std(P_op) / mean(P_op)` | activepower |
+| f₃ | Min-to-mean | `min(P_op) / mean(P_op)` | activepower |
+| f₄ | Non-op load factor | `mean(P_non_op) / mean(P_op)` · non_op=22:00–05:59 | activepower |
+| HU | Equivalent utilization hours | `Σ(E_day[Wh]) / max(P[W])` → h · range [0,24] | activeenergyimport, activepower |
+| CO₂ | Carbon emissions | `9.7018e-8 × Σ(E_day[Wh])` → tCO₂e · FE_2025=0.097018 tCO₂e/MWh (XM, 2026-01-30) ⚠ replace legacy 0.18 everywhere | activeenergyimport |
+| IGS | PV Yield Factor `⚠DEMO` | `Σ(E_pv_day) / P_installed` | energyproducedtoday · solarradiation |
+| TCP | Panel temp delta | `mean(T_panel) − mean(T_ambient)` | paneltemperature · ambienttemperature · source: Fronius sensor |
+| EB | Battery efficiency | `Σ(E_from_bat) / Σ(E_to_bat)` | energyfrombattery · energytobattery |
+| VU | Voltage unbalance | `mean(max(|vₙ−v̄|) / v̄) × 100` | v1, v2, v3 |
 
-**ODS priorizados:** 3, 4, 6, 7, 9, 13, 16, 17.
+---
 
-**Ejes del departamento:**
-1. **Flexibilidad energética** — renovables y tecnologías para integración.
-2. **Territorios inteligentes** — ciudades inteligentes, Industria 4.0.
-3. **Energía y sostenibilidad** — comunidades energéticas, nexo energía-agua-alimentos.
+## KPIs — Master Table
 
-**Focos energéticos UPB:** territorios inteligentes; energía, desarrollo sostenible y cultura.
+`DEMO` = shown with reference values (amber panel). `REAL` = calculated from live data.
 
-## Lineamientos de diseño
+| # | Name | Unit | Formula | Threshold | SDG | ESG axis | Stakeholder | Status | Blocker / ref value |
+|---|---|---|---|---|---|---|---|---|---|
+| 01 | Consumo/m² | kWh/m² | `Σ(E_day÷1000) / Área_bloque` | TBD · ref: 8–25 kWh/m²·mo (UPME PGEE) | 7,9 | Regen & resilience | Institutional leaders | **DEMO** | Areas pending from Planeación Física UPB · ref=1200 m²/block |
+| 02 | Intensidad por usuario | kWh/user·mo | `Σ(E_day÷1000) / N_users` | TBD after 12-mo cycle | 4,7,9 | Conscious leadership | Academic sector | **DEMO** | "Active user" definition pending (students + FTE) · ref=3500 users |
+| 03 | Pico de demanda | kW + timestamp | `max(P)` per period per block | TBD: monthly peak mean+1σ (yr 1) | 7,9 | Conscious leadership | Leaders + business | REAL | — |
+| 04 | Ahorro verificado | % | `[1 − Σ(E_act÷1000)/E_base_adj] × 100` · E_base_adj normalized by users+temp (ISO 50001 Annex B) | ≥3% annual (Ley 2169/2021, UPME PGEE) | 7,9,13 | Regen & resilience | All groups | **DEMO** | No 12-mo baseline yet · ref=prior period×1.03 |
+| 05 | Emisiones CO₂ | tCO₂e | See CO₂ indicator above | ≥3% annual reduction; long-term: carbon neutrality (Ley 2169/2021) | 7,13,17 | Regen & resilience | Public + community | REAL | ⚠ Replace 0.18 legacy FE everywhere |
+| 06 | Performance Ratio FV | % | `PR=(YF/RY)×100` · `YF=Σ(E_pv)/P_inst` · `RY=Σ(G×Δt)/1000` | ≥75% target · <65% degradation alert (IEC 61724-1:2017, tropical adj.) | 7,9,13 | Regen & resilience | Academic + business | **DEMO** | Fronius irradiance resolution unconfirmed; kWp unconfirmed · ref=PR 73% |
+| 07 | Autosuficiencia solar | % | `Σ(E_solar_self)/Σ(E_grid+E_solar_AC)×100` · if no export meter: `E_self≈energyproducedtoday` | ≥15% guidance (GRI 302-1, Ley 2169/2021) | 7,13,17 | Regen & resilience | Students + alumni | **DEMO** | `etinverterxw` export unconfirmed; kWp unconfirmed · ref=SS 12% |
+| 08 | Load Factor | 0–1 | See LF indicator | ≥0.65 guidance (Papadopoulos et al. 2016: mean 0.67) | 7,9 | Conscious leadership | Maintenance | REAL | — |
+| 09 | Consumo no operacional | % | `[Σ(E_22h-07h÷1000)/Σ(E_total÷1000)]×100` (=f₄ by energy) | Alert >20% · target <10% · range 8–22% (Papadopoulos et al. 2016) | 7,9 | Regen & resilience | Maintenance | REAL | — |
+| 10 | Desbalance de tensión | % | `[max(|vₙ−v̄|)/v̄]×100` NEMA MG-1 | <2% normal · alert ≥2% for ≥3h consecutive (IEEE 1159:2019, NTC 5001) | 9 | Conscious leadership | Tech + labs | REAL | — |
+| 11 | Factor de potencia | — | Direct: `totalpowerfactor` | ≥0.9 · alert <0.9 for ≥3h (CREG 108/1997, NTC 5001) | 9 | Conscious leadership | Finance + ops | REAL | — |
+| 12 | THD-V | % | Direct: `relativethdvoltage` · per-phase: `harmonicsv1/v2/v3` | <5% LV (≤1kV) · alert ≥5% sustained (IEEE 519:2022, NTC 5001) | 9 | Conscious leadership | Tech + labs | REAL | — |
 
-- **Dashboards:** claros, dinámicos, visualmente atractivos y comprensibles para el ciudadano común. Prioridad = **sencillez**. Visión: *"campus que hable en todos los rincones"*.
-- **KPIs:** diagnóstico inmediato por área para líderes; revelar dolores y qué pasa en cada edificio para orientar decisiones basadas en datos.
+**TBD threshold protocol (KPI 01, 02, 03):** collect 12 months → compute mean+σ per block and period type → alert=mean+1σ, target=mean−10% → validate with stakeholders (A2.4) → review annually.
 
-## Restricciones técnicas
+---
 
-- **Sin automatización** por ahora — no es objetivo de esta fase.
-- **Prioridad:** KPIs e indicadores con **validez académica** (aún en validación).
-- **Granularidad espacial:** separados por **bloque/edificio**.
-- **Temporalidad:** **1 hora**.
+## Coding Rules
 
-
-## 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
+**1. Think Before Coding** — state assumptions explicitly; surface tradeoffs; ask when unclear.
+**2. Simplicity First** — minimum code that solves the problem; no speculative features or abstractions.
+**3. Surgical Changes** — touch only what the request requires; match existing style; don't refactor unrelated code; remove only orphans your changes create.
+**4. Goal-Driven Execution** — define verifiable success criteria before implementing; for multi-step tasks state a plan with verify steps.
