@@ -46,7 +46,7 @@ KPIs/indicators blocked by missing data are shown with plausible reference value
 
 | # | Name | Unit | Formula | Threshold | SDG | ESG axis | Stakeholder | Status | Blocker / ref value |
 |---|---|---|---|---|---|---|---|---|---|
-| 01 | Consumo/m² | kWh/m² | `Σ(E_day÷1000) / Área_bloque` | TBD · ref: 8–25 kWh/m²·mo (UPME PGEE) | 7,9 | Regen & resilience | Institutional leaders | **DEMO** | Areas pending from Planeación Física UPB · ref=1200 m²/block |
+| 01 | Consumo/m² | kWh/m² | `Σ(E_day÷1000) / Área_bloque` | TBD · ref: 8–25 kWh/m²·mo (UPME PGEE) | 7,9 | Regen & resilience | Institutional leaders | REAL | - |
 | 02 | Intensidad por usuario | kWh/user·mo | `Σ(E_day÷1000) / N_users` | TBD after 12-mo cycle | 4,7,9 | Conscious leadership | Academic sector | **DEMO** | "Active user" definition pending (students + FTE) · ref=3500 users |
 | 03 | Pico de demanda | kW + timestamp | `max(P)` per period per block | TBD: monthly peak mean+1σ (yr 1) | 7,9 | Conscious leadership | Leaders + business | REAL | — |
 | 04 | Ahorro verificado | % | `[1 − Σ(E_act÷1000)/E_base_adj] × 100` · E_base_adj normalized by users+temp (ISO 50001 Annex B) | ≥3% annual (Ley 2169/2021, UPME PGEE) | 7,9,13 | Regen & resilience | All groups | **DEMO** | No 12-mo baseline yet · ref=prior period×1.03 |
@@ -54,7 +54,7 @@ KPIs/indicators blocked by missing data are shown with plausible reference value
 | 06 | Performance Ratio FV | % | `PR=(YF/RY)×100` · `YF=Σ(E_pv)/P_inst` · `RY=Σ(G×Δt)/1000` | ≥75% target · <65% degradation alert (IEC 61724-1:2017, tropical adj.) | 7,9,13 | Regen & resilience | Academic + business | **DEMO** | Fronius irradiance resolution unconfirmed; kWp unconfirmed · ref=PR 73% |
 | 07 | Autosuficiencia solar | % | `Σ(E_solar_self)/Σ(E_grid+E_solar_AC)×100` · if no export meter: `E_self≈energyproducedtoday` | ≥15% guidance (GRI 302-1, Ley 2169/2021) | 7,13,17 | Regen & resilience | Students + alumni | **DEMO** | `etinverterxw` export unconfirmed; kWp unconfirmed · ref=SS 12% |
 | 08 | Load Factor | 0–1 | See LF indicator | ≥0.65 guidance (Papadopoulos et al. 2016: mean 0.67) | 7,9 | Conscious leadership | Maintenance | REAL | — |
-| 09 | Consumo no operacional | % | `[Σ(E_22h-07h÷1000)/Σ(E_total÷1000)]×100` (=f₄ by energy) | Alert >20% · target <10% · range 8–22% (Papadopoulos et al. 2016) | 7,9 | Regen & resilience | Maintenance | REAL | — |
+| 09 | Consumo no operacional | % | `[Σ(E_22h-06h÷1000)/Σ(E_total÷1000)]×100` (=f₄ by energy) | Alert >30% · target <20% · acceptable 20–30% (Tavakoli et al. 2023, Sustainability 15:4240, open-access — UTS Sydney univ bldg: nighttime baseload ~38% of peak; Gul & Patidar 2015, EnB 87:155 — Heriot-Watt academic bldg: ~33% of peak at night) | 7,9 | Regen & resilience | Maintenance | REAL | — |
 | 10 | Desbalance de tensión | % | `[max(|vₙ−v̄|)/v̄]×100` NEMA MG-1 | <2% normal · alert ≥2% for ≥3h consecutive (IEEE 1159:2019, NTC 5001) | 9 | Conscious leadership | Tech + labs | REAL | — |
 | 11 | Factor de potencia | — | Direct: `totalpowerfactor` | ≥0.9 · alert <0.9 for ≥3h (CREG 108/1997, NTC 5001) | 9 | Conscious leadership | Finance + ops | REAL | — |
 | 12 | THD-V | % | Direct: `relativethdvoltage` · per-phase: `harmonicsv1/v2/v3` | <5% LV (≤1kV) · alert ≥5% sustained (IEEE 519:2022, NTC 5001) | 9 | Conscious leadership | Tech + labs | REAL | — |

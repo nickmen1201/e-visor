@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -40,6 +41,22 @@ TON_CO2_POR_VEHICULO_ANO  = 4.6         # tCO₂e / vehículo·año (IPCC)
 
 REF_LF  = 0.65
 
+# Áreas construidas por bloque [m²] — Fuente: AREAS_2026.xlsx, Planeación Física UPB, 2026
+AREAS_BLOQUE = {
+    3:   4778.68,
+    4:  10309.89,
+    5:  10008.87,
+    7:   4834.72,
+    8:   3836.47,
+    9:   7579.50,
+    10: 11469.06,
+    12:  2848.88,
+    15:  7780.01,
+    17:  7611.12,
+    18: 35916.80,
+}
+REF_KWH_M2_ANO = 124.4     # kWh/m²·año — umbral de intensidad energética
+
 UMBRAL_FP  = 0.9   # adimensional — Factor de potencia (KPI 11)
 UMBRAL_THD = 5.0   # % — THD-V (KPI 12)
 
@@ -59,6 +76,12 @@ def cargar_datos():
     kpi['fecha'] = pd.to_datetime(kpi['fecha'])
 
     try:
+        kpi01 = pd.read_csv(BASE / 'kpi01_bloque.csv')
+        kpi01['fecha'] = pd.to_datetime(kpi01['fecha'])
+    except FileNotFoundError:
+        kpi01 = None
+
+    try:
         raw = pd.read_csv(BASE / 'etsmartmeter_clean.csv',
                           parse_dates=['time_index_colombia'])
         raw['hora']  = raw['time_index_colombia'].dt.hour
@@ -66,10 +89,10 @@ def cargar_datos():
     except FileNotFoundError:
         raw = None
 
-    return ind, kpi, raw
+    return ind, kpi, kpi01, raw
 
 
-ind, kpi, raw = cargar_datos()
+ind, kpi, kpi01, raw = cargar_datos()
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -555,20 +578,29 @@ def graficar_co2_evolucion(ind_df):
     diario = ind_df.groupby('fecha')['CO2_tCO2e'].sum().sort_index()
     if diario.empty:
         return go.Figure()
-    acum     = diario.cumsum()
+
+    # Totales mensuales — permiten apreciar la tendencia mes a mes
+    mensual   = diario.resample('ME').sum()
+    etiquetas = [f.strftime('%b %Y') for f in mensual.index]
+    n = len(mensual)
+    colores_mes = [C_AMBER if i == n - 1 else C_TEAL for i in range(n)]
+
     es_finde = diario.index.dayofweek >= 5
     laboral  = diario[~es_finde]
     finde    = diario[es_finde]
+
     fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
-        row_heights=[0.6, 0.4], vertical_spacing=0.08,
-        subplot_titles=('Emisiones acumuladas', 'Emisiones diarias'),
+        rows=2, cols=1,
+        row_heights=[0.55, 0.45], vertical_spacing=0.14,
+        subplot_titles=('Emisiones mensuales', 'Emisiones diarias'),
     )
-    fig.add_trace(go.Scatter(
-        x=acum.index, y=acum.values, mode='lines',
-        fill='tozeroy', fillcolor='rgba(239,159,39,0.25)',
-        line=dict(color=C_AMBER, width=2),
-        name='Acumulado (tCO₂e)',
+    fig.add_trace(go.Bar(
+        x=etiquetas, y=mensual.values,
+        marker_color=colores_mes,
+        text=[f'{v:.3f} tCO₂e' for v in mensual.values],
+        textposition='outside',
+        name='tCO₂e / mes',
+        showlegend=False,
     ), row=1, col=1)
     fig.add_trace(go.Bar(
         x=laboral.index, y=laboral.values,
@@ -579,7 +611,7 @@ def graficar_co2_evolucion(ind_df):
         name='Fin de semana (S–D)', marker_color=C_AMBER,
     ), row=2, col=1)
     fig.update_layout(
-        title=dict(text='Evolución temporal de emisiones CO₂',
+        title=dict(text='Evolución mensual de emisiones CO₂',
                    font=dict(size=13), x=0, xanchor='left'),
         plot_bgcolor='white', paper_bgcolor='white',
         height=480, margin=dict(t=60, b=40, l=70, r=20),
@@ -587,8 +619,8 @@ def graficar_co2_evolucion(ind_df):
                     xanchor='right', x=1, font=dict(size=11)),
         barmode='overlay',
     )
-    fig.update_yaxes(title_text='tCO₂e acumuladas', gridcolor='#EEEEEE', row=1, col=1)
-    fig.update_yaxes(title_text='tCO₂e/día',        gridcolor='#EEEEEE', row=2, col=1)
+    fig.update_yaxes(title_text='tCO₂e / mes', gridcolor='#EEEEEE', row=1, col=1)
+    fig.update_yaxes(title_text='tCO₂e / día', gridcolor='#EEEEEE', row=2, col=1)
     fig.update_xaxes(gridcolor='#EEEEEE', row=2, col=1)
     return fig
 
@@ -841,10 +873,39 @@ with tab1:
 
     # ── Desbalance de tensión ─────────────────────────────────────────────────
     st.subheader("Desbalance de tensión")
+
+    # Promedio por bloque — barras horizontales coloreadas por umbral
+    db_bloque = (
+        ind_f
+        .assign(bloque=ind_f['entity_id'].str.replace('SmartMeter_SM_', '', regex=False))
+        .groupby('bloque')['desbalance_pct'].mean()
+        .sort_values()
+    )
+    colores_db = [C_TEAL if v < 2 else (C_AMBER if v <= 3 else C_RED) for v in db_bloque.values]
+    fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(db_bloque))))
+    ax.barh(db_bloque.index.tolist(), db_bloque.values, color=colores_db, edgecolor='none')
+    ax.axvline(2.0, color=C_AMBER, linestyle='--', linewidth=1)
+    ax.axvline(3.0, color=C_RED,   linestyle='--', linewidth=1)
+    ax.text(2.05, len(db_bloque) - 0.5, '2% alerta',  ha='left', va='top', fontsize=9, color=C_AMBER)
+    ax.text(3.05, len(db_bloque) - 0.5, '3% crítico', ha='left', va='top', fontsize=9, color=C_RED)
+    for i, v in enumerate(db_bloque.values):
+        ax.text(v + 0.02, i, f'{v:.2f}%', va='center', fontsize=10)
+    ax.set_xlim(0, max(db_bloque.max() * 1.25, 3.5))
+    ax.set_title('Desbalance de tensión por bloque (promedio del período)', loc='left')
+    ax.set_xlabel('% — Verde < 2% · Ámbar 2–3% · Rojo > 3%')
+    plt.tight_layout()
+    st.pyplot(fig); plt.close(fig)
+
+    # Evolución diaria — barras verticales coloreadas por umbral
     serie_db = ind_f.groupby('fecha')['desbalance_pct'].mean().sort_index()
+    colores_diario = [C_TEAL if v < 2 else (C_AMBER if v <= 3 else C_RED) for v in serie_db.values]
     fig, ax = plt.subplots(figsize=(11, 4))
-    ax.plot(serie_db.index, serie_db.values, color=C_PURPLE, linewidth=1.5)
-    ax.set_ylim(0, serie_db.max() * 1.15)
+    ax.bar(serie_db.index, serie_db.values, color=colores_diario, edgecolor='none', width=0.8)
+    ax.axhline(2.0, color=C_AMBER, linestyle='--', linewidth=1)
+    ax.axhline(3.0, color=C_RED,   linestyle='--', linewidth=1)
+    ax.text(serie_db.index[-1], 2.05, '  2% alerta',  va='bottom', fontsize=9, color=C_AMBER)
+    ax.text(serie_db.index[-1], 3.05, '  3% crítico', va='bottom', fontsize=9, color=C_RED)
+    ax.set_ylim(0, max(serie_db.max() * 1.2, 3.5))
     ax.set_title('Desbalance de tensión — evolución diaria', loc='left')
     ax.set_ylabel('%')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
@@ -862,7 +923,56 @@ with tab2:
         st.stop()
 
     # ── KPI 01 — Consumo por metro cuadrado ──────────────────────────────────
-    # PENDIENTE: requiere Área_bloque [m²] — pendiente Planeación Física UPB
+    st.subheader("KPI 01 — Consumo por metro cuadrado (kWh/m²)")
+    if kpi01 is not None:
+        kpi01_f = kpi01[kpi01['fecha'].between(inicio, fin)].copy()
+
+        # Si hay un medidor seleccionado, filtrar al bloque correspondiente
+        if seleccion != "Todos":
+            m_bloque = re.search(r'_B(\d+)_', seleccion)
+            if m_bloque:
+                kpi01_f = kpi01_f[kpi01_f['bloque'] == int(m_bloque.group(1))]
+
+        if not kpi01_f.empty:
+            periodo_dias = max(1, (fin - inicio).days + 1)
+
+            # Energía real medida en el período (sin extrapolación)
+            total_periodo  = kpi01_f.groupby('bloque')['KPI01_kwh_m2'].sum().sort_values()
+            # Umbral proporcional al período: 124.4 kWh/m²·año × (días / 365)
+            umbral_periodo = REF_KWH_M2_ANO * periodo_dias / 365
+
+            colores_k1 = [
+                C_TEAL if v <= umbral_periodo else C_AMBER
+                for v in total_periodo.values
+            ]
+            fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(total_periodo))))
+            ax.barh([f'B{b}' for b in total_periodo.index],
+                    total_periodo.values, color=colores_k1, edgecolor='none')
+            ax.axvline(umbral_periodo, color=C_AMBER, linestyle='--', linewidth=1.5)
+            ax.text(umbral_periodo + total_periodo.max() * 0.01, len(total_periodo) - 0.5,
+                    f'{umbral_periodo:.1f} kWh/m²  ({periodo_dias} d)',
+                    ha='left', va='top', fontsize=9, color=C_AMBER)
+            for i, (b, v) in enumerate(zip(total_periodo.index, total_periodo.values)):
+                area = AREAS_BLOQUE.get(b, None)
+                lbl  = f'{v:.2f}' + (f'  ({area:,.0f} m²)' if area else '')
+                ax.text(v + total_periodo.max() * 0.01, i, lbl, va='center', fontsize=9)
+            ax.set_xlim(0, max(total_periodo.max() * 1.3, umbral_periodo * 1.4))
+            ax.set_title('KPI 01 — Intensidad energética por bloque',
+                         loc='left')
+            ax.set_xlabel(f'kWh/m² — período de {periodo_dias} días'
+                          f'  ·  Verde ≤ {umbral_periodo:.1f}  ·  Naranja > {umbral_periodo:.1f}')
+            plt.tight_layout()
+            st.pyplot(fig); plt.close(fig)
+            st.caption(
+                f"Energía real medida: {periodo_dias} días. "
+                f"Umbral proporcional: {REF_KWH_M2_ANO} kWh/m²·año × {periodo_dias}/365 "
+                f"= {umbral_periodo:.1f} kWh/m²·período. "
+                f"Áreas: AREAS_2026.xlsx, Planeación Física UPB (2026)."
+            )
+        else:
+            st.info("Sin datos de KPI 01 para el período y bloque seleccionado.")
+    else:
+        st.warning("kpi01_bloque.csv no encontrado — ejecutar el notebook de cálculo primero.")
 
     # ── KPI 02 — Intensidad energética por usuario ───────────────────────────
     # PENDIENTE: requiere N_usuarios_activos — pendiente definición institucional
