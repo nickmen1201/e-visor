@@ -57,6 +57,13 @@ AREAS_BLOQUE = {
 }
 REF_KWH_M2_ANO = 124.4     # kWh/m²·año — umbral de intensidad energética
 
+# Tarifa de energía EPM — enero 2026 (Mercado Regulado, Nivel I)
+# Fuente: EPM, "Tarifas y Costo de Energía Eléctrica — Mercado Regulado — enero de 2026", pág. 1
+# URL verificable: https://www.epm.com.co/clientesyusuarios/energia/tarifas-energia/
+TARIFA_BASE_COP_KWH  = 859.19    # NT1 Oficial y Exentos de Contribución (CU base)
+TARIFA_INDCOM_COP_KWH = 1_031.03  # NT1 Industrial y Comercial (con contribución solidaria)
+HOGAR_KWH_MES        = 130        # kWh/mes — consumo subsidiado estrato 1–2, Medellín
+
 UMBRAL_FP  = 0.9   # adimensional — Factor de potencia (KPI 11)
 UMBRAL_THD = 5.0   # % — THD-V (KPI 12)
 
@@ -69,16 +76,18 @@ _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 @st.cache_data
 def cargar_datos():
-    ind = pd.read_csv(BASE / 'indicadores_diarios.csv')
+    xl = pd.ExcelFile(BASE / 'evisor_resultados.xlsx')
+
+    ind = xl.parse('indicadores_diarios')
     ind['fecha'] = pd.to_datetime(ind['fecha'])
 
-    kpi = pd.read_csv(BASE / 'kpis_diarios.csv')
+    kpi = xl.parse('kpis_diarios')
     kpi['fecha'] = pd.to_datetime(kpi['fecha'])
 
     try:
-        kpi01 = pd.read_csv(BASE / 'kpi01_bloque.csv')
+        kpi01 = xl.parse('kpi01_bloque')
         kpi01['fecha'] = pd.to_datetime(kpi01['fecha'])
-    except FileNotFoundError:
+    except Exception:
         kpi01 = None
 
     try:
@@ -924,6 +933,8 @@ with tab2:
 
     # ── KPI 01 — Consumo por metro cuadrado ──────────────────────────────────
     st.subheader("KPI 01 — Consumo por metro cuadrado (kWh/m²)")
+    total_kwh_campus = None  # se rellena si kpi01 disponible; se reutiliza en KPI 09
+
     if kpi01 is not None:
         kpi01_f = kpi01[kpi01['fecha'].between(inicio, fin)].copy()
 
@@ -968,6 +979,48 @@ with tab2:
                 f"Umbral proporcional: {REF_KWH_M2_ANO} kWh/m²·año × {periodo_dias}/365 "
                 f"= {umbral_periodo:.1f} kWh/m²·período. "
                 f"Áreas: AREAS_2026.xlsx, Planeación Física UPB (2026)."
+            )
+
+            # ── Traducción monetaria KPI 01 ──────────────────────────────────
+            total_kwh_campus = kpi01_f['e_wh'].sum() / 1_000  # Wh → kWh
+            costo_cop        = total_kwh_campus * TARIFA_BASE_COP_KWH
+            hogares_meses    = total_kwh_campus / HOGAR_KWH_MES
+
+            st.markdown("---")
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                st.metric(
+                    label="⚡ Energía consumida en el período",
+                    value=f"{total_kwh_campus:,.0f} kWh",
+                    help=f"Suma real de todos los medidores del campus en los {periodo_dias} días seleccionados.",
+                )
+            with col_m2:
+                st.metric(
+                    label="💰 Costo estimado",
+                    value=f"${costo_cop:,.0f} COP",
+                    help=(
+                        f"Tarifa base EPM (NT1, Oficial y Exentos, sin contribución solidaria): "
+                        f"{TARIFA_BASE_COP_KWH:.2f} COP/kWh. "
+                        f"Con contribución industrial: {TARIFA_INDCOM_COP_KWH:.2f} COP/kWh."
+                    ),
+                )
+            with col_m3:
+                st.metric(
+                    label="🏠 Hogares equivalentes",
+                    value=f"{hogares_meses:,.0f} meses-hogar",
+                    help=(
+                        f"Basado en el consumo subsidiado de {HOGAR_KWH_MES} kWh/mes "
+                        f"(estrato 1–2, Medellín)."
+                    ),
+                )
+            st.info(
+                f"**¿Qué significa este costo?** En este período de **{periodo_dias} días**, "
+                f"el campus consumió energía equivalente a la de **{hogares_meses:,.0f} hogares** "
+                f"durante un mes (a {HOGAR_KWH_MES} kWh/hogar). "
+                f"El costo estimado es **${costo_cop:,.0f} COP** usando la tarifa de referencia EPM "
+                f"para enero 2026 ({TARIFA_BASE_COP_KWH:.0f} COP/kWh). "
+                f"[Ver tarifas EPM]"
+                f"(https://www.epm.com.co/clientesyusuarios/energia/tarifas-energia/) · pág. 1"
             )
         else:
             st.info("Sin datos de KPI 01 para el período y bloque seleccionado.")
@@ -1054,22 +1107,82 @@ with tab2:
     # ── KPI 09 — Índice de consumo no operacional ────────────────────────────
     st.subheader("KPI 09 — Índice de consumo no operacional")
     f4_bloque  = kpi_f.groupby('entity_id')['KPI09_f4_pct'].mean().sort_values(ascending=False)
-    colores_k9 = [C_RED if v > 20 else (C_AMBER if v > 10 else C_TEAL) for v in f4_bloque]
+    colores_k9 = [C_RED if v > 30 else (C_AMBER if v >= 20 else C_TEAL) for v in f4_bloque]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(f4_bloque))))
     ax.barh(f4_bloque.index.astype(str), f4_bloque.values, color=colores_k9, edgecolor='none')
-    ax.axvline(10, color=C_TEAL, linestyle='--', linewidth=1)
-    ax.axvline(20, color=C_RED,  linestyle='--', linewidth=1)
-    ax.text(10, len(f4_bloque) - 0.3, ' objetivo 10%',
-            ha='left', va='bottom', fontsize=9, color=C_TEAL)
-    ax.text(20, len(f4_bloque) - 0.3, ' alerta 20%',
+    ax.axvline(20, color=C_AMBER, linestyle='--', linewidth=1)
+    ax.axvline(30, color=C_RED,   linestyle='--', linewidth=1)
+    ax.text(20, len(f4_bloque) - 0.3, '  objetivo < 20%',
+            ha='left', va='bottom', fontsize=9, color=C_AMBER)
+    ax.text(30, len(f4_bloque) - 0.3, '  alerta > 30%',
             ha='left', va='bottom', fontsize=9, color=C_RED)
     for i, v in enumerate(f4_bloque.values):
         ax.text(v + 0.3, i, f'{v:.1f}%', va='center', fontsize=10)
-    ax.set_xlim(0, max(f4_bloque.max() * 1.15, 25))
+    ax.set_xlim(0, max(f4_bloque.max() * 1.15, 35))
     ax.set_title('KPI 09 — Consumo no operacional por bloque', loc='left')
-    ax.set_xlabel('% energía 22:00–06:00 · Verde < 10% · Ámbar 10–20% · Rojo > 20%')
+    ax.set_xlabel('% energía 22:00–06:00 · Verde < 20% · Ámbar 20–30% · Rojo > 30%')
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
+
+    # ── Traducción monetaria KPI 09 ──────────────────────────────────────────
+    if total_kwh_campus is not None and total_kwh_campus > 0:
+        pct_noche_promedio = float(f4_bloque.mean()) / 100
+        e_noche_kwh        = total_kwh_campus * pct_noche_promedio
+        costo_noche_cop    = e_noche_kwh * TARIFA_BASE_COP_KWH
+
+        # Ahorro potencial si se reduce al objetivo del 20%
+        pct_exceso = max(0.0, pct_noche_promedio - 0.20)
+        ahorro_kwh = total_kwh_campus * pct_exceso
+        ahorro_cop = ahorro_kwh * TARIFA_BASE_COP_KWH
+
+        col_n1, col_n2, col_n3 = st.columns(3)
+        with col_n1:
+            st.metric(
+                label="🌙 Energía nocturna estimada",
+                value=f"{e_noche_kwh:,.0f} kWh",
+                help="Estimado: energía total del campus × % promedio de consumo nocturno (KPI 09).",
+            )
+        with col_n2:
+            st.metric(
+                label="💸 Costo del consumo nocturno",
+                value=f"${costo_noche_cop:,.0f} COP",
+                help=f"Tarifa de referencia EPM enero 2026: {TARIFA_BASE_COP_KWH:.2f} COP/kWh.",
+            )
+        with col_n3:
+            if ahorro_cop > 0:
+                st.metric(
+                    label="💡 Ahorro potencial (bajar al 20%)",
+                    value=f"${ahorro_cop:,.0f} COP",
+                    delta=f"−{ahorro_kwh:,.0f} kWh si se llega al objetivo",
+                    delta_color="inverse",
+                    help="Ahorro estimado si el consumo nocturno se reduce del nivel actual al 20% objetivo.",
+                )
+            else:
+                st.metric(
+                    label="✅ Objetivo de consumo nocturno",
+                    value="Cumplido",
+                    help="El consumo nocturno promedio ya se encuentra por debajo del 20% objetivo.",
+                )
+
+        if ahorro_cop > 0:
+            st.warning(
+                f"**Energía fuera de horario:** {pct_noche_promedio * 100:.1f}% del consumo del campus "
+                f"ocurre entre las 22:00 y las 07:00 — equivale a **{e_noche_kwh:,.0f} kWh** "
+                f"y **${costo_noche_cop:,.0f} COP** en el período. "
+                f"Reducir ese porcentaje al 20% (objetivo) liberaría "
+                f"**${ahorro_cop:,.0f} COP** — sin afectar la operación diurna."
+            )
+        else:
+            st.success(
+                f"**Consumo nocturno bajo control:** {pct_noche_promedio * 100:.1f}% — "
+                f"por debajo del objetivo del 20%. Costo nocturno estimado: "
+                f"**${costo_noche_cop:,.0f} COP** en el período."
+            )
+        st.caption(
+            f"Costo calculado con tarifa EPM de referencia: {TARIFA_BASE_COP_KWH:.2f} COP/kWh "
+            f"(NT1 Oficial y Exentos de Contribución, Mercado Regulado, enero 2026). "
+            f"[Ver fuente](https://www.epm.com.co/clientesyusuarios/energia/tarifas-energia/) · pág. 1"
+        )
 
     # ── KPI 10 — Desbalance de tensión ───────────────────────────────────────
     st.subheader("KPI 10 — Desbalance de tensión")
