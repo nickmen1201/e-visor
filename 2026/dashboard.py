@@ -85,12 +85,6 @@ def cargar_datos():
     kpi['fecha'] = pd.to_datetime(kpi['fecha'])
 
     try:
-        kpi01 = xl.parse('kpi01_bloque')
-        kpi01['fecha'] = pd.to_datetime(kpi01['fecha'])
-    except Exception:
-        kpi01 = None
-
-    try:
         raw = pd.read_csv(BASE / 'etsmartmeter_clean.csv',
                           parse_dates=['time_index_colombia'])
         raw['hora']  = raw['time_index_colombia'].dt.hour
@@ -98,10 +92,10 @@ def cargar_datos():
     except FileNotFoundError:
         raw = None
 
-    return ind, kpi, kpi01, raw
+    return ind, kpi, raw
 
 
-ind, kpi, kpi01, raw = cargar_datos()
+ind, kpi, raw = cargar_datos()
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -933,16 +927,19 @@ with tab2:
 
     # ── KPI 01 — Consumo por metro cuadrado ──────────────────────────────────
     st.subheader("KPI 01 — Consumo por metro cuadrado (kWh/m²)")
-    total_kwh_campus = None  # se rellena si kpi01 disponible; se reutiliza en KPI 09
+    total_kwh_campus = None  # se rellena si KPI01 disponible; se reutiliza en KPI 09
 
-    if kpi01 is not None:
-        kpi01_f = kpi01[kpi01['fecha'].between(inicio, fin)].copy()
-
-        # Si hay un medidor seleccionado, filtrar al bloque correspondiente
-        if seleccion != "Todos":
-            m_bloque = re.search(r'_B(\d+)_', seleccion)
-            if m_bloque:
-                kpi01_f = kpi01_f[kpi01_f['bloque'] == int(m_bloque.group(1))]
+    if 'KPI01_kwh_m2' in kpi_f.columns:
+        # kpi_f ya está filtrado por fecha y medidor.
+        # KPI01 es de nivel bloque: drop_duplicates(bloque+fecha) evita contar el
+        # mismo bloque varias veces cuando "Todos" incluye varios medidores del bloque.
+        kpi01_f = (
+            kpi_f
+            .drop_duplicates(subset=['bloque', 'fecha'])
+            [['bloque', 'fecha', 'KPI01_kwh_m2', 'e_wh', 'area_m2']]
+            .dropna(subset=['KPI01_kwh_m2'])
+            .copy()
+        )
 
         if not kpi01_f.empty:
             periodo_dias = max(1, (fin - inicio).days + 1)
@@ -1025,7 +1022,7 @@ with tab2:
         else:
             st.info("Sin datos de KPI 01 para el período y bloque seleccionado.")
     else:
-        st.warning("kpi01_bloque.csv no encontrado — ejecutar el notebook de cálculo primero.")
+        st.warning("KPI 01 no disponible — ejecutar el notebook de cálculo para generar evisor_resultados.xlsx.")
 
     # ── KPI 02 — Intensidad energética por usuario ───────────────────────────
     # PENDIENTE: requiere N_usuarios_activos — pendiente definición institucional
