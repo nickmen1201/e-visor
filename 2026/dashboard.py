@@ -65,7 +65,6 @@ TARIFA_INDCOM_COP_KWH = 1_031.03  # NT1 Industrial y Comercial (con contribució
 HOGAR_KWH_MES        = 130        # kWh/mes — consumo subsidiado estrato 1–2, Medellín
 
 UMBRAL_FP  = 0.9   # adimensional — Factor de potencia (KPI 11)
-UMBRAL_THD = 5.0   # % — THD-V (KPI 12)
 
 _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
@@ -834,26 +833,11 @@ with tab1:
     st.plotly_chart(graficar_comparativo_bloques(ind_fechas, 'f4', 'f₄ (adimensional)'),
                     use_container_width=True)
 
-    # ── HU — Horas de utilización ─────────────────────────────────────────────
-    st.subheader("HU — Horas de utilización")
-    hu_bloque = (ind_f.groupby('entity_id')['HU_horas']
-                 .apply(lambda x: x.clip(upper=24).mean())
-                 .sort_values())
-    fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(hu_bloque))))
-    ax.barh(hu_bloque.index.astype(str), hu_bloque.values, color=C_TEAL, edgecolor='none')
-    for i, v in enumerate(hu_bloque.values):
-        ax.text(v + 0.2, i, f'{v:.1f} h', va='center', fontsize=10)
-    ax.set_xlim(0, 24 * 1.1)
-    ax.set_title('HU — Horas de utilización por bloque (promedio diario)', loc='left')
-    ax.set_xlabel('Horas equivalentes a máxima potencia · máximo teórico: 24 h/día')
-    plt.tight_layout()
-    st.pyplot(fig); plt.close(fig)
-
     # ── CO₂ — Emisiones de carbono ────────────────────────────────────────────
     st.subheader("CO₂ — Huella de carbono del Ecocampus")
     _area_bloques = None  # dict {entity_id: m²} pendiente de Planeación Física UPB
-    _ind_co2      = ind_f[ind_f['HU_horas'] <= 24]          # excluye días con rollover de medidor
-    _ind_full_co2 = ind[ind['HU_horas'] <= 24]
+    _ind_co2      = ind_f
+    _ind_full_co2 = ind
     st.plotly_chart(graficar_co2_card(_ind_co2, ind_full=_ind_full_co2), use_container_width=True)
     st.plotly_chart(graficar_co2_evolucion(_ind_co2), use_container_width=True)
     st.plotly_chart(graficar_co2_por_bloque(_ind_co2, area_por_bloque=_area_bloques),
@@ -1206,21 +1190,3 @@ with tab2:
                  lambda v: C_TEAL if v >= 0.95 else (C_AMBER if v >= 0.90 else C_RED),
                  'verde ≥ 0.95  |  naranja 0.90–0.95  |  rojo < 0.90')
 
-    # ── KPI 12 — Distorsión armónica total de voltaje (THD-V) ─────────────────
-    st.subheader("KPI 12 — THD-V")
-    serie_thd = ind_f.groupby('fecha')['thd_v_pct'].mean().sort_index()
-    fig, ax = plt.subplots(figsize=(11, 4))
-    ax.axhspan(UMBRAL_THD, max(serie_thd.max() * 1.15, UMBRAL_THD * 1.4), color=C_RED, alpha=0.08)
-    ax.plot(serie_thd.index, serie_thd.values, color=C_PURPLE, linewidth=1.5)
-    ax.axhline(UMBRAL_THD, color=C_RED, linestyle='--', linewidth=1)
-    ax.text(serie_thd.index[-1], UMBRAL_THD, f'  umbral {UMBRAL_THD}%',
-            va='center', fontsize=10, color=C_RED)
-    ax.set_ylim(0, max(serie_thd.max() * 1.2, UMBRAL_THD * 1.4))
-    ax.set_title('THD-V — evolución diaria', loc='left')
-    ax.set_ylabel('%')
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
-    fig.autofmt_xdate(); plt.tight_layout()
-    st.pyplot(fig); plt.close(fig)
-    _render_tira(kpi_f, 'KPI12_thd_v_pct', 'KPI 12 — THD-V',
-                 lambda v: C_TEAL if v < 3 else (C_AMBER if v <= 5 else C_RED),
-                 'verde < 3%  |  naranja 3–5%  |  rojo > 5%')

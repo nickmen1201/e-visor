@@ -23,6 +23,7 @@
 | **TCP** | Delta temperatura panel | Horaria → diaria · por sensor | Sin umbral fijo | — | ⚠ DEMO · requiere sensor Fronius |
 | **EB** | Eficiencia de batería | Diaria · por sistema | Sin umbral fijo | — | ⚠ DEMO · requiere datos inversor |
 | **VU** | Desbalance de tensión | Horaria → media diaria · por medidor | < 2 % normal · alerta ≥ 2 % sostenida ≥ 3 h consecutivas | Barra por bloque + barra diaria | IEEE 1159:2019 · NTC 5001 |
+| **THD-V** | Distorsión armónica total de voltaje | Horaria · por medidor | < 5 % LV (≤ 1 kV) · alerta ≥ 5 % sostenida (IEEE 519:2022 · NTC 5001) | Serie diaria + tira de calor | IEEE 519:2022 · NTC 5001 |
 
 ---
 
@@ -41,7 +42,6 @@
 | **09** | Consumo no operacional | Diaria · por medidor | Objetivo < 20 % · Aceptable 20–30 % · Alerta > 30 % | Barra por bloque | REAL |
 | **10** | Desbalance de tensión | Horaria · por medidor | < 2 % normal · alerta ≥ 2 % sostenida ≥ 3 h (IEEE 1159:2019 · NTC 5001) | Tira de calor diaria por medidor | REAL |
 | **11** | Factor de potencia | Horaria · por medidor | ≥ 0.9 · alerta < 0.9 sostenida ≥ 3 h (CREG 108/1997 · NTC 5001) | Serie diaria + tira de calor | REAL |
-| **12** | THD-V | Horaria · por medidor | < 5 % LV (≤ 1 kV) · alerta ≥ 5 % sostenida (IEEE 519:2022 · NTC 5001) | Serie diaria + tira de calor | REAL |
 
 ---
 
@@ -49,7 +49,7 @@
 
 | Ventana | Indicadores / KPIs |
 |---|---|
-| **Horaria** (detección de eventos) | VU · KPI 10 · KPI 11 · KPI 12 |
+| **Horaria** (detección de eventos) | VU · THD-V · KPI 10 · KPI 11 |
 | **Diaria** (diagnóstico operativo) | LF · PAR · f₁ · f₂ · f₃ · f₄ · HU · CO₂ · KPI 03 · KPI 08 · KPI 09 |
 | **Mensual** (reporte de gestión) | CO₂ (acum.) · KPI 05 · KPI 07 |
 | **Anual** (cumplimiento ESG) | KPI 01 · KPI 04 · KPI 05 (meta) |
