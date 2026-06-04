@@ -39,8 +39,6 @@ ARBOLES_POR_TON_CO2       = 45
 TON_CO2_POR_VUELO_MDE_BOG = 0.18        # tCO₂e / trayecto
 TON_CO2_POR_VEHICULO_ANO  = 4.6         # tCO₂e / vehículo·año (IPCC)
 
-REF_LF  = 0.65
-
 # Áreas construidas por bloque [m²] — Fuente: AREAS_2026.xlsx, Planeación Física UPB, 2026
 AREAS_BLOQUE = {
     3:   4778.68,
@@ -55,8 +53,6 @@ AREAS_BLOQUE = {
     17:  7611.12,
     18: 35916.80,
 }
-REF_KWH_M2_ANO = 124.4     # kWh/m²·año — umbral de intensidad energética
-
 # Tarifa de energía EPM — enero 2026 (Mercado Regulado, Nivel I)
 # Fuente: EPM, "Tarifas y Costo de Energía Eléctrica — Mercado Regulado — enero de 2026", pág. 1
 # URL verificable: https://www.epm.com.co/clientesyusuarios/energia/tarifas-energia/
@@ -64,7 +60,10 @@ TARIFA_BASE_COP_KWH  = 859.19    # NT1 Oficial y Exentos de Contribución (CU ba
 TARIFA_INDCOM_COP_KWH = 1_031.03  # NT1 Industrial y Comercial (con contribución solidaria)
 HOGAR_KWH_MES        = 130        # kWh/mes — consumo subsidiado estrato 1–2, Medellín
 
-UMBRAL_FP  = 0.9   # adimensional — Factor de potencia (KPI 11)
+UMBRAL_FP_OBJ   = 0.90  # Factor de potencia — umbral objetivo  (KPI 11)
+UMBRAL_FP_ALERT = 0.85  # Factor de potencia — umbral de alerta (KPI 11)
+UMBRAL_DB_OBJ   = 1.0   # Desbalance de tensión — umbral objetivo %  (KPI 10 / VU)
+UMBRAL_DB_ALERT = 2.0   # Desbalance de tensión — umbral de alerta % (KPI 10 / VU)
 
 _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
@@ -868,31 +867,31 @@ with tab1:
         .groupby('bloque')['desbalance_pct'].mean()
         .sort_values()
     )
-    colores_db = [C_TEAL if v < 2 else (C_AMBER if v <= 3 else C_RED) for v in db_bloque.values]
+    colores_db = [C_TEAL if v < UMBRAL_DB_OBJ else (C_AMBER if v <= UMBRAL_DB_ALERT else C_RED) for v in db_bloque.values]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(db_bloque))))
     ax.barh(db_bloque.index.tolist(), db_bloque.values, color=colores_db, edgecolor='none')
-    ax.axvline(2.0, color=C_AMBER, linestyle='--', linewidth=1)
-    ax.axvline(3.0, color=C_RED,   linestyle='--', linewidth=1)
-    ax.text(2.05, len(db_bloque) - 0.5, '2% alerta',  ha='left', va='top', fontsize=9, color=C_AMBER)
-    ax.text(3.05, len(db_bloque) - 0.5, '3% crítico', ha='left', va='top', fontsize=9, color=C_RED)
+    ax.axvline(UMBRAL_DB_OBJ,   color=C_TEAL, linestyle=':', linewidth=1)
+    ax.axvline(UMBRAL_DB_ALERT, color=C_RED,  linestyle='--', linewidth=1)
+    ax.text(UMBRAL_DB_OBJ + 0.04,   len(db_bloque) - 0.5, f'{UMBRAL_DB_OBJ:.0f}% objetivo', ha='left', va='top', fontsize=9, color=C_TEAL)
+    ax.text(UMBRAL_DB_ALERT + 0.04, len(db_bloque) - 0.5, f'{UMBRAL_DB_ALERT:.0f}% alerta',  ha='left', va='top', fontsize=9, color=C_RED)
     for i, v in enumerate(db_bloque.values):
         ax.text(v + 0.02, i, f'{v:.2f}%', va='center', fontsize=10)
-    ax.set_xlim(0, max(db_bloque.max() * 1.25, 3.5))
+    ax.set_xlim(0, max(db_bloque.max() * 1.25, UMBRAL_DB_ALERT * 1.5))
     ax.set_title('Desbalance de tensión por bloque (promedio del período)', loc='left')
-    ax.set_xlabel('% — Verde < 2% · Ámbar 2–3% · Rojo > 3%')
+    ax.set_xlabel(f'% — Verde < {UMBRAL_DB_OBJ:.0f}% · Ámbar {UMBRAL_DB_OBJ:.0f}–{UMBRAL_DB_ALERT:.0f}% · Rojo > {UMBRAL_DB_ALERT:.0f}%')
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
 
     # Evolución diaria — barras verticales coloreadas por umbral
     serie_db = ind_f.groupby('fecha')['desbalance_pct'].mean().sort_index()
-    colores_diario = [C_TEAL if v < 2 else (C_AMBER if v <= 3 else C_RED) for v in serie_db.values]
+    colores_diario = [C_TEAL if v < UMBRAL_DB_OBJ else (C_AMBER if v <= UMBRAL_DB_ALERT else C_RED) for v in serie_db.values]
     fig, ax = plt.subplots(figsize=(11, 4))
     ax.bar(serie_db.index, serie_db.values, color=colores_diario, edgecolor='none', width=0.8)
-    ax.axhline(2.0, color=C_AMBER, linestyle='--', linewidth=1)
-    ax.axhline(3.0, color=C_RED,   linestyle='--', linewidth=1)
-    ax.text(serie_db.index[-1], 2.05, '  2% alerta',  va='bottom', fontsize=9, color=C_AMBER)
-    ax.text(serie_db.index[-1], 3.05, '  3% crítico', va='bottom', fontsize=9, color=C_RED)
-    ax.set_ylim(0, max(serie_db.max() * 1.2, 3.5))
+    ax.axhline(UMBRAL_DB_OBJ,   color=C_TEAL, linestyle=':',  linewidth=1)
+    ax.axhline(UMBRAL_DB_ALERT, color=C_RED,  linestyle='--', linewidth=1)
+    ax.text(serie_db.index[-1], UMBRAL_DB_OBJ + 0.04,   f'  {UMBRAL_DB_OBJ:.0f}% objetivo', va='bottom', fontsize=9, color=C_TEAL)
+    ax.text(serie_db.index[-1], UMBRAL_DB_ALERT + 0.04, f'  {UMBRAL_DB_ALERT:.0f}% alerta',  va='bottom', fontsize=9, color=C_RED)
+    ax.set_ylim(0, max(serie_db.max() * 1.2, UMBRAL_DB_ALERT * 1.5))
     ax.set_title('Desbalance de tensión — evolución diaria', loc='left')
     ax.set_ylabel('%')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
@@ -929,36 +928,45 @@ with tab2:
             periodo_dias = max(1, (fin - inicio).days + 1)
 
             # Energía real medida en el período (sin extrapolación)
-            total_periodo  = kpi01_f.groupby('bloque')['KPI01_kwh_m2'].sum().sort_values()
-            # Umbral proporcional al período: 124.4 kWh/m²·año × (días / 365)
-            umbral_periodo = REF_KWH_M2_ANO * periodo_dias / 365
+            total_periodo = kpi01_f.groupby('bloque')['KPI01_kwh_m2'].sum().sort_values()
+
+            # Umbrales dinámicos (menor kWh/m² es mejor)
+            vals_k1          = total_periodo.values
+            mu_k1            = float(vals_k1.mean()) if len(vals_k1) > 0 else 0.0
+            sigma_k1         = float(vals_k1.std())  if len(vals_k1) > 1 else 0.0
+            umbral_alerta_k1   = mu_k1 + sigma_k1
+            umbral_objetivo_k1 = mu_k1 * 0.93
 
             colores_k1 = [
-                C_TEAL if v <= umbral_periodo else C_AMBER
-                for v in total_periodo.values
+                C_TEAL if v <= umbral_objetivo_k1 else
+                (C_AMBER if v <= umbral_alerta_k1 else C_RED)
+                for v in vals_k1
             ]
             fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(total_periodo))))
             ax.barh([f'B{b}' for b in total_periodo.index],
                     total_periodo.values, color=colores_k1, edgecolor='none')
-            ax.axvline(umbral_periodo, color=C_AMBER, linestyle='--', linewidth=1.5)
-            ax.text(umbral_periodo + total_periodo.max() * 0.01, len(total_periodo) - 0.5,
-                    f'{umbral_periodo:.1f} kWh/m²  ({periodo_dias} d)',
-                    ha='left', va='top', fontsize=9, color=C_AMBER)
+            ax.axvline(umbral_objetivo_k1, color=C_TEAL, linestyle=':',  linewidth=1.2)
+            ax.axvline(umbral_alerta_k1,   color=C_RED,  linestyle='--', linewidth=1.2)
+            ax.text(umbral_objetivo_k1 + total_periodo.max() * 0.01, len(total_periodo) - 0.5,
+                    f'objetivo {umbral_objetivo_k1:.2f}', ha='left', va='top', fontsize=9, color=C_TEAL)
+            ax.text(umbral_alerta_k1 + total_periodo.max() * 0.01, len(total_periodo) * 0.5,
+                    f'alerta {umbral_alerta_k1:.2f}', ha='left', va='top', fontsize=9, color=C_RED)
             for i, (b, v) in enumerate(zip(total_periodo.index, total_periodo.values)):
                 area = AREAS_BLOQUE.get(b, None)
                 lbl  = f'{v:.2f}' + (f'  ({area:,.0f} m²)' if area else '')
                 ax.text(v + total_periodo.max() * 0.01, i, lbl, va='center', fontsize=9)
-            ax.set_xlim(0, max(total_periodo.max() * 1.3, umbral_periodo * 1.4))
-            ax.set_title('KPI 01 — Intensidad energética por bloque',
-                         loc='left')
-            ax.set_xlabel(f'kWh/m² — período de {periodo_dias} días'
-                          f'  ·  Verde ≤ {umbral_periodo:.1f}  ·  Naranja > {umbral_periodo:.1f}')
+            ax.set_xlim(0, max(total_periodo.max() * 1.3, umbral_alerta_k1 * 1.3))
+            ax.set_title('KPI 01 — Intensidad energética por bloque', loc='left')
+            ax.set_xlabel(
+                f'kWh/m² — período de {periodo_dias} días'
+                f'  ·  Verde ≤ {umbral_objetivo_k1:.2f}  ·  Ámbar {umbral_objetivo_k1:.2f}–{umbral_alerta_k1:.2f}  ·  Rojo > {umbral_alerta_k1:.2f}'
+            )
             plt.tight_layout()
             st.pyplot(fig); plt.close(fig)
             st.caption(
                 f"Energía real medida: {periodo_dias} días. "
-                f"Umbral proporcional: {REF_KWH_M2_ANO} kWh/m²·año × {periodo_dias}/365 "
-                f"= {umbral_periodo:.1f} kWh/m²·período. "
+                f"Umbrales dinámicos — objetivo: μ×0.93 = {umbral_objetivo_k1:.2f} kWh/m² · "
+                f"alerta: μ+1σ = {umbral_alerta_k1:.2f} kWh/m². "
                 f"Áreas: AREAS_2026.xlsx, Planeación Física UPB (2026)."
             )
 
@@ -1018,14 +1026,20 @@ with tab2:
         media_pico=('KPI03_pico_kw', 'mean'),
         sigma_pico=('KPI03_pico_kw', 'std'),
     )
-    agg['umbral'] = agg['media_pico'] + 2 * agg['sigma_pico'].fillna(0)
+    agg['alerta']   = agg['media_pico'] + 1 * agg['sigma_pico'].fillna(0)
+    agg['objetivo'] = agg['media_pico'] * 0.93
     agg = agg.sort_values('pico', ascending=True)
-    colores_k3 = [C_RED if p > u else C_TEAL for p, u in zip(agg['pico'], agg['umbral'])]
+    colores_k3 = [
+        C_RED if p > a else (C_AMBER if p > o else C_TEAL)
+        for p, a, o in zip(agg['pico'], agg['alerta'], agg['objetivo'])
+    ]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(agg))))
     ax.barh(agg.index.astype(str), agg['pico'] / 1000, color=colores_k3,
             edgecolor='none', label='Pico máx.')
-    ax.barh(agg.index.astype(str), agg['umbral'] / 1000, color='none',
-            edgecolor='#5F5E5A', linewidth=1, linestyle='--', label='Umbral (μ+2σ)')
+    ax.barh(agg.index.astype(str), agg['alerta'] / 1000, color='none',
+            edgecolor=C_RED, linewidth=1, linestyle='--', label='Alerta (μ+1σ)')
+    ax.barh(agg.index.astype(str), agg['objetivo'] / 1000, color='none',
+            edgecolor=C_TEAL, linewidth=1, linestyle=':', label='Objetivo (μ−7%)')
     for i, p in enumerate(agg['pico'] / 1000):
         ax.text(p + agg['pico'].max() / 1000 * 0.01, i, f'{p:.1f} kW',
                 va='center', fontsize=9)
@@ -1039,26 +1053,38 @@ with tab2:
 
     # ── KPI 05 — Emisiones de CO₂ (huella de carbono) ────────────────────────
     st.subheader("KPI 05 — Emisiones CO₂ acumuladas vs. meta")
-    actual_diario = (kpi_f[kpi_f['KPI05_CO2_tCO2e'] <= 1.0]   # excluye días con rollover de medidor
+    actual_diario = (kpi_f[kpi_f['KPI05_CO2_tCO2e'] <= 1.0]
                      .groupby('fecha')['KPI05_CO2_tCO2e'].sum().sort_index())
-    actual_acum   = actual_diario.cumsum()
-    anterior_acum = actual_acum * 1.10    # estimado: sin línea base histórica real
-    meta_acum     = anterior_acum * 0.97  # meta −3% (Ley 2169/2021)
+    actual_acum = actual_diario.cumsum()
+
+    # Umbrales dinámicos (menor CO₂ es mejor)
+    mu_co2    = float(actual_diario.mean()) if len(actual_diario) > 0 else 0.0
+    sigma_co2 = float(actual_diario.std())  if len(actual_diario) > 1 else 0.0
+    n_acum    = pd.Series(range(1, len(actual_diario) + 1), index=actual_diario.index,
+                          dtype=float)
+    alerta_acum   = (mu_co2 + sigma_co2) * n_acum
+    objetivo_acum = mu_co2 * 0.93         * n_acum
+
     fig, ax = plt.subplots(figsize=(11, 4))
-    ax.plot(actual_acum.index, anterior_acum.values,
-            color=C_GRAY, linewidth=2, label='Período equiv. año anterior (estimado)')
+    ax.fill_between(actual_acum.index, objetivo_acum.values, alerta_acum.values,
+                    alpha=0.07, color=C_AMBER)
+    ax.plot(actual_acum.index, alerta_acum.values,
+            color=C_RED,  linewidth=1.5, linestyle='--', label=f'Alerta acum. (μ+1σ)')
+    ax.plot(actual_acum.index, objetivo_acum.values,
+            color=C_TEAL, linewidth=1.5, linestyle=':',  label=f'Objetivo acum. (μ−7%)')
     ax.plot(actual_acum.index, actual_acum.values,
-            color=C_AMBER, linewidth=2.5, marker='o', markersize=4, label='Período actual')
-    ax.plot(actual_acum.index, meta_acum.values,
-            color=C_PURPLE, linewidth=1.5, linestyle='--', label='Meta −3% (Ley 2169)')
-    ax.set_title('KPI 05 — Emisiones CO₂ acumuladas vs. meta', loc='left')
+            color=C_AMBER, linewidth=2.5, marker='o', markersize=4, label='Real acumulado')
+    ax.set_title('KPI 05 — Emisiones CO₂ acumuladas', loc='left')
     ax.set_ylabel('tCO₂e acumuladas')
     ax.legend(frameon=False, loc='upper left')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
     fig.autofmt_xdate(); plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
-    st.caption("Año anterior: estimado (+10% sobre período actual). "
-               "Reemplazar con línea base real (ISO 50001 Anexo B) cuando esté disponible.")
+    st.caption(
+        f"Umbrales dinámicos — μ diario = {mu_co2:.4f} tCO₂e · "
+        f"alerta acum. = (μ+1σ)×días = {alerta_acum.iloc[-1]:.3f} tCO₂e · "
+        f"objetivo acum. = μ×0.93×días = {objetivo_acum.iloc[-1]:.3f} tCO₂e."
+    )
 
     # ── KPI 06 — Performance Ratio del sistema FV ────────────────────────────
     # PENDIENTE: requiere solarirradiation (Fronius) y P_instalada [kWp] confirmada.
@@ -1069,39 +1095,69 @@ with tab2:
     #            Verificar si inversor XW registra energía exportada a red.
 
     # ── KPI 08 — Load Factor (cumplimiento umbral LF ≥ 0,65) ─────────────────
-    st.subheader("KPI 08 — Load Factor (cumplimiento umbral LF ≥ 0,65)")
-    cumplimiento_lf = (kpi_f.groupby('entity_id')
-                       .apply(lambda g: (g['KPI08_LF'] >= REF_LF).mean() * 100)
-                       .sort_values())
-    colores_k8 = [C_TEAL if v >= 50 else C_AMBER for v in cumplimiento_lf]
-    fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(cumplimiento_lf))))
-    ax.barh(cumplimiento_lf.index.astype(str), cumplimiento_lf.values,
-            color=colores_k8, edgecolor='none')
-    for i, v in enumerate(cumplimiento_lf.values):
-        ax.text(v + 0.5, i, f'{v:.0f}%', va='center', fontsize=10)
-    ax.set_xlim(0, 115)
-    ax.set_title('KPI 08 — % de días con LF ≥ 0,65 por bloque', loc='left')
-    ax.set_xlabel('% de días en cumplimiento · Verde ≥ 50% · Ámbar < 50%')
+    st.subheader("KPI 08 — Load Factor")
+    # LF: mayor es mejor → alerta = μ − 1σ · objetivo = μ × 1.07
+    lf_vals            = kpi_f['KPI08_LF'].dropna()
+    mu_lf              = float(lf_vals.mean()) if len(lf_vals) > 0 else 0.65
+    sigma_lf           = float(lf_vals.std())  if len(lf_vals) > 1 else 0.0
+    umbral_alerta_lf   = max(0.0,  mu_lf - sigma_lf)
+    umbral_objetivo_lf = min(1.0,  mu_lf * 1.07)
+
+    lf_medio = kpi_f.groupby('entity_id')['KPI08_LF'].mean().sort_values()
+    colores_k8 = [
+        C_TEAL if v >= umbral_objetivo_lf else
+        (C_RED  if v <  umbral_alerta_lf  else C_AMBER)
+        for v in lf_medio.values
+    ]
+    fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(lf_medio))))
+    ax.barh(lf_medio.index.astype(str), lf_medio.values, color=colores_k8, edgecolor='none')
+    ax.axvline(umbral_objetivo_lf, color=C_TEAL, linestyle=':',  linewidth=1.2)
+    ax.axvline(umbral_alerta_lf,   color=C_RED,  linestyle='--', linewidth=1.2)
+    ax.text(umbral_objetivo_lf + 0.005, len(lf_medio) - 0.5,
+            f'objetivo {umbral_objetivo_lf:.3f}', ha='left', va='top', fontsize=9, color=C_TEAL)
+    ax.text(umbral_alerta_lf + 0.005, len(lf_medio) * 0.5,
+            f'alerta {umbral_alerta_lf:.3f}', ha='left', va='top', fontsize=9, color=C_RED)
+    for i, v in enumerate(lf_medio.values):
+        ax.text(v + 0.005, i, f'{v:.3f}', va='center', fontsize=10)
+    ax.set_xlim(0, min(1.05, lf_medio.max() * 1.2))
+    ax.set_title('KPI 08 — Load Factor medio por bloque', loc='left')
+    ax.set_xlabel(
+        f'LF (adimensional) · Verde ≥ {umbral_objetivo_lf:.3f} · '
+        f'Ámbar {umbral_alerta_lf:.3f}–{umbral_objetivo_lf:.3f} · Rojo < {umbral_alerta_lf:.3f}'
+    )
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
 
     # ── KPI 09 — Índice de consumo no operacional ────────────────────────────
     st.subheader("KPI 09 — Índice de consumo no operacional")
-    f4_bloque  = kpi_f.groupby('entity_id')['KPI09_f4_pct'].mean().sort_values(ascending=False)
-    colores_k9 = [C_RED if v > 30 else (C_AMBER if v >= 20 else C_TEAL) for v in f4_bloque]
+    f4_bloque = kpi_f.groupby('entity_id')['KPI09_f4_pct'].mean().sort_values(ascending=False)
+    # Consumo no operacional: menor es mejor → alerta = μ + 1σ · objetivo = μ × 0.93
+    mu_k9            = float(f4_bloque.mean()) if len(f4_bloque) > 0 else 20.0
+    sigma_k9         = float(f4_bloque.std())  if len(f4_bloque) > 1 else 0.0
+    umbral_alerta_k9   = mu_k9 + sigma_k9
+    umbral_objetivo_k9 = mu_k9 * 0.93
+
+    colores_k9 = [
+        C_RED if v > umbral_alerta_k9 else
+        (C_AMBER if v > umbral_objetivo_k9 else C_TEAL)
+        for v in f4_bloque
+    ]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(f4_bloque))))
     ax.barh(f4_bloque.index.astype(str), f4_bloque.values, color=colores_k9, edgecolor='none')
-    ax.axvline(20, color=C_AMBER, linestyle='--', linewidth=1)
-    ax.axvline(30, color=C_RED,   linestyle='--', linewidth=1)
-    ax.text(20, len(f4_bloque) - 0.3, '  objetivo < 20%',
-            ha='left', va='bottom', fontsize=9, color=C_AMBER)
-    ax.text(30, len(f4_bloque) - 0.3, '  alerta > 30%',
+    ax.axvline(umbral_objetivo_k9, color=C_TEAL, linestyle=':',  linewidth=1.2)
+    ax.axvline(umbral_alerta_k9,   color=C_RED,  linestyle='--', linewidth=1.2)
+    ax.text(umbral_objetivo_k9, len(f4_bloque) - 0.3, f'  objetivo {umbral_objetivo_k9:.1f}%',
+            ha='left', va='bottom', fontsize=9, color=C_TEAL)
+    ax.text(umbral_alerta_k9, len(f4_bloque) - 0.3, f'  alerta {umbral_alerta_k9:.1f}%',
             ha='left', va='bottom', fontsize=9, color=C_RED)
     for i, v in enumerate(f4_bloque.values):
         ax.text(v + 0.3, i, f'{v:.1f}%', va='center', fontsize=10)
-    ax.set_xlim(0, max(f4_bloque.max() * 1.15, 35))
+    ax.set_xlim(0, max(f4_bloque.max() * 1.15, umbral_alerta_k9 * 1.3))
     ax.set_title('KPI 09 — Consumo no operacional por bloque', loc='left')
-    ax.set_xlabel('% energía 22:00–06:00 · Verde < 20% · Ámbar 20–30% · Rojo > 30%')
+    ax.set_xlabel(
+        f'% energía 22:00–06:00 · Verde ≤ {umbral_objetivo_k9:.1f}% · '
+        f'Ámbar {umbral_objetivo_k9:.1f}–{umbral_alerta_k9:.1f}% · Rojo > {umbral_alerta_k9:.1f}%'
+    )
     plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
 
@@ -1111,8 +1167,8 @@ with tab2:
         e_noche_kwh        = total_kwh_campus * pct_noche_promedio
         costo_noche_cop    = e_noche_kwh * TARIFA_BASE_COP_KWH
 
-        # Ahorro potencial si se reduce al objetivo del 20%
-        pct_exceso = max(0.0, pct_noche_promedio - 0.20)
+        # Ahorro potencial si se reduce al objetivo dinámico
+        pct_exceso = max(0.0, pct_noche_promedio - umbral_objetivo_k9 / 100)
         ahorro_kwh = total_kwh_campus * pct_exceso
         ahorro_cop = ahorro_kwh * TARIFA_BASE_COP_KWH
 
@@ -1132,17 +1188,17 @@ with tab2:
         with col_n3:
             if ahorro_cop > 0:
                 st.metric(
-                    label="💡 Ahorro potencial (bajar al 20%)",
+                    label=f"💡 Ahorro potencial (bajar al {umbral_objetivo_k9:.1f}%)",
                     value=f"${ahorro_cop:,.0f} COP",
                     delta=f"−{ahorro_kwh:,.0f} kWh si se llega al objetivo",
                     delta_color="inverse",
-                    help="Ahorro estimado si el consumo nocturno se reduce del nivel actual al 20% objetivo.",
+                    help=f"Ahorro estimado si el consumo nocturno se reduce al {umbral_objetivo_k9:.1f}% objetivo.",
                 )
             else:
                 st.metric(
                     label="✅ Objetivo de consumo nocturno",
                     value="Cumplido",
-                    help="El consumo nocturno promedio ya se encuentra por debajo del 20% objetivo.",
+                    help=f"El consumo nocturno promedio ya se encuentra por debajo del {umbral_objetivo_k9:.1f}% objetivo.",
                 )
 
         if ahorro_cop > 0:
@@ -1150,13 +1206,13 @@ with tab2:
                 f"**Energía fuera de horario:** {pct_noche_promedio * 100:.1f}% del consumo del campus "
                 f"ocurre entre las 22:00 y las 07:00 — equivale a **{e_noche_kwh:,.0f} kWh** "
                 f"y **${costo_noche_cop:,.0f} COP** en el período. "
-                f"Reducir ese porcentaje al 20% (objetivo) liberaría "
+                f"Reducir ese porcentaje al {umbral_objetivo_k9:.1f}% (objetivo) liberaría "
                 f"**${ahorro_cop:,.0f} COP** — sin afectar la operación diurna."
             )
         else:
             st.success(
                 f"**Consumo nocturno bajo control:** {pct_noche_promedio * 100:.1f}% — "
-                f"por debajo del objetivo del 20%. Costo nocturno estimado: "
+                f"por debajo del objetivo del {umbral_objetivo_k9:.1f}%. Costo nocturno estimado: "
                 f"**${costo_noche_cop:,.0f} COP** en el período."
             )
         st.caption(
@@ -1168,25 +1224,29 @@ with tab2:
     # ── KPI 10 — Desbalance de tensión ───────────────────────────────────────
     st.subheader("KPI 10 — Desbalance de tensión")
     _render_tira(kpi_f, 'KPI10_desbalance_pct', 'KPI 10 — Desbalance de tensión',
-                 lambda v: C_TEAL if v < 2 else (C_AMBER if v <= 3 else C_RED),
-                 'verde < 2%  |  naranja 2–3%  |  rojo > 3%')
+                 lambda v: C_TEAL if v < UMBRAL_DB_OBJ else (C_AMBER if v <= UMBRAL_DB_ALERT else C_RED),
+                 f'verde < {UMBRAL_DB_OBJ:.0f}%  |  naranja {UMBRAL_DB_OBJ:.0f}–{UMBRAL_DB_ALERT:.0f}%  |  rojo > {UMBRAL_DB_ALERT:.0f}%')
 
     # ── KPI 11 — Factor de potencia total ────────────────────────────────────
     st.subheader("KPI 11 — Factor de potencia total")
     serie_fp = ind_f.groupby('fecha')['fp_promedio'].mean().sort_index()
     fig, ax = plt.subplots(figsize=(11, 4))
-    ax.axhspan(0, UMBRAL_FP, color=C_RED, alpha=0.08)
+    ax.axhspan(0, UMBRAL_FP_ALERT, color=C_RED,   alpha=0.08)
+    ax.axhspan(UMBRAL_FP_ALERT, UMBRAL_FP_OBJ, color=C_AMBER, alpha=0.05)
     ax.plot(serie_fp.index, serie_fp.values, color=C_PURPLE, linewidth=1.5)
-    ax.axhline(UMBRAL_FP, color=C_RED, linestyle='--', linewidth=1)
-    ax.text(serie_fp.index[-1], UMBRAL_FP, f'  umbral {UMBRAL_FP}',
+    ax.axhline(UMBRAL_FP_OBJ,   color=C_TEAL, linestyle=':',  linewidth=1)
+    ax.axhline(UMBRAL_FP_ALERT, color=C_RED,  linestyle='--', linewidth=1)
+    ax.text(serie_fp.index[-1], UMBRAL_FP_OBJ,   f'  objetivo {UMBRAL_FP_OBJ}',
+            va='center', fontsize=10, color=C_TEAL)
+    ax.text(serie_fp.index[-1], UMBRAL_FP_ALERT, f'  alerta {UMBRAL_FP_ALERT}',
             va='center', fontsize=10, color=C_RED)
-    ax.set_ylim(min(0.7, serie_fp.min() * 0.98), 1.0)
+    ax.set_ylim(min(UMBRAL_FP_ALERT * 0.95, serie_fp.min() * 0.98), 1.0)
     ax.set_title('Factor de potencia — evolución diaria', loc='left')
     ax.set_ylabel('FP (adimensional)')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
     fig.autofmt_xdate(); plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
     _render_tira(kpi_f, 'KPI11_fp', 'KPI 11 — Factor de potencia',
-                 lambda v: C_TEAL if v >= 0.95 else (C_AMBER if v >= 0.90 else C_RED),
-                 'verde ≥ 0.95  |  naranja 0.90–0.95  |  rojo < 0.90')
+                 lambda v: C_TEAL if v >= UMBRAL_FP_OBJ else (C_AMBER if v >= UMBRAL_FP_ALERT else C_RED),
+                 f'verde ≥ {UMBRAL_FP_OBJ}  |  naranja {UMBRAL_FP_ALERT}–{UMBRAL_FP_OBJ}  |  rojo < {UMBRAL_FP_ALERT}')
 
