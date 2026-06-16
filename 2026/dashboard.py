@@ -6,6 +6,12 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+_chart_n = [0]
+
+def _chart(fig, **kwargs):
+    _chart_n[0] += 1
+    st.plotly_chart(fig, key=f"c{_chart_n[0]}", **kwargs)
+
 st.set_page_config(page_title="E-Visor · Ecocampus UPB", layout="wide",
                    initial_sidebar_state="expanded")
 
@@ -721,9 +727,9 @@ with tab_ind:
             color_fn=lambda v: _semaforo(v, 0.65, 0.50),
             ref_lines=[(0.65, C_TEAL, 'objetivo 0.65')],
         )
-        st.plotly_chart(fig_lf_bar, use_container_width=True)
+        _chart(fig_lf_bar, use_container_width=True)
     with col_b:
-        st.plotly_chart(serie_diaria(ind_f, 'LF', 'LF (adimensional)'),
+        _chart(serie_diaria(ind_f, 'LF', 'LF (adimensional)'),
                         use_container_width=True)
 
     # ── PAR — Peak-to-Average Ratio ─────────────────────────────────────────
@@ -737,9 +743,9 @@ with tab_ind:
             xlabel='PAR (>1 = picos pronunciados)',
             color_fn=lambda v: _semaforo(v, 1.54, 2.0, mayor_es_mejor=False),
         )
-        st.plotly_chart(fig_par_bar, use_container_width=True)
+        _chart(fig_par_bar, use_container_width=True)
     with col_b:
-        st.plotly_chart(serie_diaria(ind_f, 'PAR', 'PAR (adimensional)'),
+        _chart(serie_diaria(ind_f, 'PAR', 'PAR (adimensional)'),
                         use_container_width=True)
 
     # ── f₁ — Uniformidad diurna ─────────────────────────────────────────────
@@ -750,17 +756,17 @@ with tab_ind:
 
     col_a, col_b, col_c = st.columns([1, 1.5, 1])
     with col_a:
-        st.plotly_chart(card_indicador(
+        _chart(card_indicador(
             _v1, 'P̄ op.', _comp['prom'] if _comp else None,
             'P_max op.', _comp['max'] if _comp else None,
             _d1, _r1, _fr1, _fh1), use_container_width=True)
     with col_b:
-        st.plotly_chart(serie_diaria(ind_f, 'f1', 'f₁ (adimensional)'),
+        _chart(serie_diaria(ind_f, 'f1', 'f₁ (adimensional)'),
                         use_container_width=True)
     with col_c:
-        st.plotly_chart(graficar_evidencia_f1(_comp), use_container_width=True)
+        _chart(graficar_evidencia_f1(_comp), use_container_width=True)
 
-    st.plotly_chart(comparativo_bloques(ind_fechas, 'f1', 'f₁ (adimensional)'),
+    _chart(comparativo_bloques(ind_fechas, 'f1', 'f₁ (adimensional)'),
                     use_container_width=True)
 
     # ── f₂ — CV de carga ────────────────────────────────────────────────────
@@ -771,17 +777,17 @@ with tab_ind:
 
     col_a, col_b, col_c = st.columns([1, 1.5, 1])
     with col_a:
-        st.plotly_chart(card_indicador(
+        _chart(card_indicador(
             _v2, 'σ op.', _comp['std'] if _comp else None,
             'P̄ op.', _comp['prom'] if _comp else None,
             _d2, _r2, _fr2, _fh2), use_container_width=True)
     with col_b:
-        st.plotly_chart(serie_diaria(ind_f, 'f2_CV', 'f₂ (adimensional)'),
+        _chart(serie_diaria(ind_f, 'f2_CV', 'f₂ (adimensional)'),
                         use_container_width=True)
     with col_c:
-        st.plotly_chart(graficar_evidencia_f2(_comp), use_container_width=True)
+        _chart(graficar_evidencia_f2(_comp), use_container_width=True)
 
-    st.plotly_chart(comparativo_bloques(ind_fechas, 'f2_CV', 'f₂ (adimensional)'),
+    _chart(comparativo_bloques(ind_fechas, 'f2_CV', 'f₂ (adimensional)'),
                     use_container_width=True)
 
     # ── f₃ — Mínimo–promedio ────────────────────────────────────────────────
@@ -792,17 +798,17 @@ with tab_ind:
 
     col_a, col_b, col_c = st.columns([1, 1.5, 1])
     with col_a:
-        st.plotly_chart(card_indicador(
+        _chart(card_indicador(
             _v3, 'P_min op.', _comp['min'] if _comp else None,
             'P̄ op.', _comp['prom'] if _comp else None,
             _d3, _r3, _fr3, _fh3), use_container_width=True)
     with col_b:
-        st.plotly_chart(serie_diaria(ind_f, 'f3', 'f₃ (adimensional)'),
+        _chart(serie_diaria(ind_f, 'f3', 'f₃ (adimensional)'),
                         use_container_width=True)
     with col_c:
-        st.plotly_chart(graficar_evidencia_f3(_comp), use_container_width=True)
+        _chart(graficar_evidencia_f3(_comp), use_container_width=True)
 
-    st.plotly_chart(comparativo_bloques(ind_fechas, 'f3', 'f₃ (adimensional)'),
+    _chart(comparativo_bloques(ind_fechas, 'f3', 'f₃ (adimensional)'),
                     use_container_width=True)
 
     # ── f₄ — Carga no operacional ────────────────────────────────────────────
@@ -832,7 +838,7 @@ with tab_ind:
                 cand_f4.index[-1] if not cand_f4.empty else None,
                 fecha_hoy_f4,
             )
-            st.plotly_chart(fig_f4_card, use_container_width=True)
+            _chart(fig_f4_card, use_container_width=True)
         with col_b:
             df_f4 = f4_diario.sort_index().copy()
             df_f4['es_finde'] = df_f4.index.dayofweek >= 5
@@ -854,11 +860,11 @@ with tab_ind:
             ))
             fig_f4_ev.update_layout(title=dict(text='Evolución diaria f₄', font=dict(size=13), x=0),
                                     xaxis_title='Fecha', yaxis_title='f₄')
-            st.plotly_chart(_layout_base(fig_f4_ev), use_container_width=True)
+            _chart(_layout_base(fig_f4_ev), use_container_width=True)
 
     if raw_f is not None and not raw_f.empty:
-        st.plotly_chart(heatmap_semanal(raw_f), use_container_width=True)
-    st.plotly_chart(comparativo_bloques(ind_fechas, 'f4', 'f₄ (adimensional)'),
+        _chart(heatmap_semanal(raw_f), use_container_width=True)
+    _chart(comparativo_bloques(ind_fechas, 'f4', 'f₄ (adimensional)'),
                     use_container_width=True)
 
     # ── CO₂ — Emisiones ────────────────────────────────────────────────────────
@@ -905,7 +911,7 @@ with tab_ind:
                               height=460, margin=dict(t=60, b=40, l=70, r=20),
                               barmode='overlay',
                               legend=dict(orientation='h', y=1.02, x=1, xanchor='right'))
-        st.plotly_chart(fig_co2, use_container_width=True)
+        _chart(fig_co2, use_container_width=True)
 
         # CO₂ por bloque
         totales = (ind_f
@@ -925,7 +931,7 @@ with tab_ind:
                                    height=max(260, 36 * len(totales) + 100),
                                    margin=dict(t=50, b=40, l=80, r=100))
         fig_co2_bloq.update_xaxes(gridcolor='#EEEEEE')
-        st.plotly_chart(fig_co2_bloq, use_container_width=True)
+        _chart(fig_co2_bloq, use_container_width=True)
 
     # ── Desbalance de tensión ────────────────────────────────────────────────
     st.markdown("## Desbalance de tensión")
@@ -943,7 +949,7 @@ with tab_ind:
                     (UMBRAL_DB_ALERT, C_RED,  f'{UMBRAL_DB_ALERT:.0f}% alerta'),
                 ],
             )
-            st.plotly_chart(fig_db_bar, use_container_width=True)
+            _chart(fig_db_bar, use_container_width=True)
         with col_b:
             serie_db = ind_f.groupby('fecha')['desbalance_pct'].mean().sort_index()
             colores_db = [_semaforo(v, UMBRAL_DB_OBJ, UMBRAL_DB_ALERT, mayor_es_mejor=False)
@@ -966,7 +972,7 @@ with tab_ind:
             fig_db_ev.update_layout(title=dict(text='Evolución diaria — desbalance de tensión',
                                                font=dict(size=13), x=0),
                                     showlegend=False, xaxis_title='Fecha', yaxis_title='%')
-            st.plotly_chart(_layout_base(fig_db_ev), use_container_width=True)
+            _chart(_layout_base(fig_db_ev), use_container_width=True)
 
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -1006,7 +1012,7 @@ with tab_kpi:
                     (umbral_alerta_k1,   C_RED,  f'alerta {umbral_alerta_k1:.2f}'),
                 ],
             )
-            st.plotly_chart(fig_k1, use_container_width=True)
+            _chart(fig_k1, use_container_width=True)
 
         with col_b:
             total_kwh_campus = kpi01_f['e_wh'].sum() / 1_000
@@ -1063,7 +1069,7 @@ with tab_kpi:
     ))
     fig_k3.update_layout(title=dict(text='KPI 03 — Pico de demanda por bloque', font=dict(size=13), x=0),
                          xaxis_title='kW', barmode='overlay')
-    st.plotly_chart(_layout_base(fig_k3, h=max(260, 36 * len(agg) + 100)), use_container_width=True)
+    _chart(_layout_base(fig_k3, h=max(260, 36 * len(agg) + 100)), use_container_width=True)
 
     # ── KPI 05 — Emisiones CO₂ acumuladas ────────────────────────────────────
     st.markdown("## KPI 05 — Emisiones CO₂ acumuladas vs. meta")
@@ -1102,7 +1108,7 @@ with tab_kpi:
         ))
         fig_k5.update_layout(title=dict(text='KPI 05 — Emisiones CO₂ acumuladas', font=dict(size=13), x=0),
                              xaxis_title='Fecha', yaxis_title='tCO₂e acumuladas')
-        st.plotly_chart(_layout_base(fig_k5, h=360), use_container_width=True)
+        _chart(_layout_base(fig_k5, h=360), use_container_width=True)
         st.caption(
             f"μ diario = {mu_co2:.4f} tCO₂e · "
             f"alerta acum. = {alerta_acum.iloc[-1]:.3f} tCO₂e · "
@@ -1122,7 +1128,7 @@ with tab_kpi:
 
     col_a, col_b = st.columns([1, 1.5])
     with col_a:
-        st.plotly_chart(barras_horizontales(
+        _chart(barras_horizontales(
             lf_medio_k8, titulo='KPI 08 — LF medio por bloque', xlabel='LF',
             color_fn=lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
             ref_lines=[
@@ -1131,7 +1137,7 @@ with tab_kpi:
             ],
         ), use_container_width=True)
     with col_b:
-        st.plotly_chart(tira_estado(
+        _chart(tira_estado(
             kpi_f, 'KPI08_LF', 'KPI 08 — Load Factor',
             lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
             f'verde ≥ {umbral_objetivo_lf:.3f}\nnaranja ≥ {umbral_alerta_lf:.3f}\nrojo < {umbral_alerta_lf:.3f}',
@@ -1148,7 +1154,7 @@ with tab_kpi:
 
     col_a, col_b = st.columns([1, 1.5])
     with col_a:
-        st.plotly_chart(barras_horizontales(
+        _chart(barras_horizontales(
             f4_bloque_k9, titulo='KPI 09 — Consumo no operacional por bloque',
             xlabel='% (22:00–06:00)',
             color_fn=lambda v: _semaforo(v, umbral_objetivo_k9, umbral_alerta_k9, mayor_es_mejor=False),
@@ -1184,7 +1190,7 @@ with tab_kpi:
                     f"({umbral_objetivo_k9:.1f}%). Costo nocturno: **${costo_noch:,.0f} COP**."
                 )
 
-    st.plotly_chart(tira_estado(
+    _chart(tira_estado(
         kpi_f, 'KPI09_f4_pct', 'KPI 09 — Consumo no operacional',
         lambda v: _semaforo(v, umbral_objetivo_k9, umbral_alerta_k9, mayor_es_mejor=False),
         f'verde ≤ {umbral_objetivo_k9:.1f}%\nnaranja ≤ {umbral_alerta_k9:.1f}%\nrojo > {umbral_alerta_k9:.1f}%',
@@ -1192,7 +1198,7 @@ with tab_kpi:
 
     # ── KPI 10 — Desbalance de tensión ───────────────────────────────────────
     st.markdown("## KPI 10 — Desbalance de tensión")
-    st.plotly_chart(tira_estado(
+    _chart(tira_estado(
         kpi_f, 'KPI10_desbalance_pct', 'KPI 10 — Desbalance de tensión',
         lambda v: _semaforo(v, UMBRAL_DB_OBJ, UMBRAL_DB_ALERT, mayor_es_mejor=False),
         f'verde < {UMBRAL_DB_OBJ:.0f}%\nnaranja < {UMBRAL_DB_ALERT:.0f}%\nrojo ≥ {UMBRAL_DB_ALERT:.0f}%',
@@ -1224,9 +1230,9 @@ with tab_kpi:
         fig_k11.update_layout(title=dict(text='KPI 11 — Factor de potencia (mínimo mensual)',
                                          font=dict(size=13), x=0),
                               xaxis_title='Fecha', yaxis_title='FP')
-        st.plotly_chart(_layout_base(fig_k11, h=320), use_container_width=True)
+        _chart(_layout_base(fig_k11, h=320), use_container_width=True)
 
-    st.plotly_chart(tira_estado(
+    _chart(tira_estado(
         kpi_f, 'KPI11_fp', 'KPI 11 — Factor de potencia',
         lambda v: _semaforo(v, UMBRAL_FP_OBJ, UMBRAL_FP_ALERT),
         f'verde ≥ {UMBRAL_FP_OBJ}\nnaranja ≥ {UMBRAL_FP_ALERT}\nrojo < {UMBRAL_FP_ALERT}',
