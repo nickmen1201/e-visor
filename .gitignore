@@ -5,8 +5,6 @@
 # ── Salidas del pipeline (archivos derivados, no código fuente) ───────────────
 2026/etsmartmeter_clean.csv
 2026/etsmartmeter_clean.parquet
-2026/resultados_e-visor.xlsx
-2026/evisor_resultados.xlsx
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
