@@ -55,8 +55,8 @@ HOGAR_KWH_MES         = 130
 
 UMBRAL_FP_OBJ   = 0.90
 UMBRAL_FP_ALERT = 0.85
-UMBRAL_DB_OBJ   = 1.0
-UMBRAL_DB_ALERT = 2.0
+UMBRAL_DB_OBJ   = 2.0   # JSON spec: objetivo < 2% normal (IEEE 1159:2019)
+UMBRAL_DB_ALERT = 3.0   # JSON spec: alerta ≥ 3%
 
 _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
