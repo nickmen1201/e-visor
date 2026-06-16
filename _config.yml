@@ -1,0 +1,3 @@
+theme: jekyll-theme-minimal
+title: e-Visor — Ecocampus UPB
+description: Dashboard energético para el Ecocampus UPB. Indicadores y KPIs calculados desde datos IoT (medidores Landis + inversores FV).

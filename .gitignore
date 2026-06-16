@@ -1,0 +1,21 @@
+# ── Datos crudos del medidor ─────────────────────────────────────────────────
+2026/etsmartmeter_*.csv
+2026/etsmartmeter_*.xlsx
+
+# ── Salidas del pipeline (archivos derivados, no código fuente) ───────────────
+2026/etsmartmeter_clean.csv
+2026/etsmartmeter_clean.parquet
+2026/resultados_e-visor.xlsx
+2026/evisor_resultados.xlsx
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Sistema ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

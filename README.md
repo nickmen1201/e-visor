@@ -1,91 +1,131 @@
-# e-visor
+# e-Visor — Dashboard Energético Ecocampus UPB
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.0-red)
-![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.x-red)
 ![Pandas](https://img.shields.io/badge/Pandas-2.x-purple)
-![NumPy](https://img.shields.io/badge/NumPy-2.x-blue)
-![Matplotlib](https://img.shields.io/badge/Matplotlib-3.x-green)
 ![Plotly](https://img.shields.io/badge/Plotly-5.x-lightgrey)
+![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange)
 
-E-visor es un proyecto de análisis y visualización energética para el **Ecocampus UPB**. Integra datos crudos del medidor inteligente, calcula indicadores y KPIs energéticos, y los expone en un dashboard interactivo de Streamlit.
+Sistema de indicadores y KPIs energéticos para el **Ecocampus UPB (Medellín)**. Transforma datos crudos de medidores IoT Landis en métricas estratégicas presentadas en un dashboard interactivo de Streamlit.
+
+---
 
 ## Inicio Rápido
 
 ```powershell
-pip install streamlit pandas numpy matplotlib plotly jupyter openpyxl
+pip install streamlit pandas numpy matplotlib plotly openpyxl
 python -m streamlit run 2026/dashboard.py
 ```
 
-## Estado Actual
+El dashboard lee `2026/resultados_e-visor.xlsx` generado por el notebook de cálculo.
 
-El proyecto tiene una cadena funcional notebook → CSV → dashboard. Conviven cuatro capas:
+---
 
-- `2026/limpieza_datos.ipynb`: preparación y saneamiento de los datos crudos del medidor.
-- `2026/calculo_indicadores_kpis_2026.ipynb`: cálculo de indicadores y KPIs diarios.
-- `2026/visualizaciones_evisor.ipynb`: espacio modular para probar nuevas formas de visualización de forma simple y rápida.
-- `2026/dashboard.py`: implementación completa del dashboard en Streamlit, organizada en dos pestañas (Indicadores y KPIs).
+## Flujo del Proyecto
 
-### Indicadores en el dashboard
-
-**11 indicadores** actualmente presentados en la pestaña Indicadores:
-
-- LF, PAR, f₁, f₂, f₃, f₄, HU, CO₂, desbalance, FP, THD-V
-
-### KPIs en el dashboard
-
-**7 KPIs** actualmente presentados en la pestaña KPIs:
-
-- KPI03, KPI05, KPI08, KPI09, KPI10, KPI11, KPI12
-
-**Nota:** KPI01 (consumo por m²) y KPI07 (autosuficiencia solar) no se presentan porque requieren datos externos no disponibles (`Área_bloque` y `energyproducedtoday` respectivamente). Se calculan en los notebooks pero no persisten en CSV ni aparecen en el dashboard.
-
-## Flujo Del Proyecto
+```
+Archivos CSV (etsmartmeter_*.csv)
+        ↓
+limpieza_datos.ipynb  →  etsmartmeter_clean.csv
+        ↓
+notebook_evisor_calculo.ipynb  →  resultados_e-visor.xlsx
+        ↓
+dashboard.py  →  Dashboard Streamlit
+```
 
 ### 1. Limpieza de datos
 
-`2026/limpieza_datos.ipynb` carga los archivos xlsx del medidor, sanea la información y exporta `etsmartmeter_clean.csv` y `etsmartmeter_clean.parquet`.
+`2026/limpieza_datos.ipynb` carga los archivos CSV del medidor inteligente Landis, sanea la información y exporta `etsmartmeter_clean.csv` y `etsmartmeter_clean.parquet`.
 
 ### 2. Cálculo de indicadores y KPIs
 
-`2026/calculo_indicadores_kpis_2026.ipynb` construye los agregados diarios:
+`2026/notebook_evisor_calculo.ipynb` calcula todos los indicadores y KPIs y los exporta en formato largo a `2026/resultados_e-visor.xlsx` con dos hojas:
 
-- `2026/indicadores_diarios.csv` / `indicadores_diarios.xlsx`
-- `2026/kpis_diarios.csv` / `kpis_diarios.xlsx`
+| Hoja | Contenido | Granularidad |
+|---|---|---|
+| `Indicadores` | IND-01 a IND-13 por bloque | Diaria / horaria / mensual |
+| `KPIs` | KPI-01 a KPI-11 por bloque | Mensual |
 
-La lógica prioriza la validez operativa: no se aplica eliminación de valores atípicos porque esos puntos pueden reflejar eventos reales relevantes para la gestión energética.
+### 3. Dashboard operativo
 
-### 3. Visualización exploratoria
+`2026/dashboard.py` expone los resultados en Streamlit con dos pestañas:
 
-`2026/visualizaciones_evisor.ipynb` se usa como laboratorio de visualización modular. Su objetivo actual es probar nuevas representaciones de forma sencilla, reutilizando los CSV ya calculados y permitiendo iterar rápido sobre alternativas gráficas antes de decidir qué llevar al producto final.
+- **Indicadores** — LF, PAR, f₁, f₂, f₃, f₄, CO₂, desbalance de tensión
+- **KPIs** — consumo/m², pico de demanda, emisiones CO₂, Load Factor, consumo no operacional, desbalance, factor de potencia
 
-### 4. Dashboard operativo
+---
 
-`2026/dashboard.py` contiene la implementación completa del dashboard en Streamlit. Organiza la vista en pestañas de Indicadores y KPIs, incluye widgets específicos para f4 y CO2, y compara valores recientes contra el mismo día de la semana anterior.
+## Indicadores
 
+| ID | Nombre | Granularidad | Estado |
+|---|---|---|---|
+| IND-01 | Load Factor (LF) | Diario | ✅ Activo |
+| IND-02 | Peak-to-Average Ratio (PAR) | Diario | ✅ Activo |
+| IND-03 | Uniformidad operacional (f₁) | Diario | ✅ Activo |
+| IND-04 | Coeficiente de variación (f₂) | Diario | ✅ Activo |
+| IND-05 | Relación mínimo-promedio (f₃) | Diario | ✅ Activo |
+| IND-06 | Factor de carga no operacional (f₄) | Diario | ✅ Activo |
+| IND-07 | Emisiones CO₂ | Mensual | ✅ Activo |
+| IND-08 | Yield Factor FV (IGS) | — | ⏳ Pendiente datos FV |
+| IND-09 | Temp. crítica de panel (TCP) | — | ⏳ Pendiente sensor Fronius |
+| IND-10 | Eficiencia de batería (EB) | — | ⏳ Pendiente inversor baterías |
+| IND-11 | Ahorro energético | — | ⏳ Pendiente línea base 12 meses |
+| IND-12 | Desbalance de tensión (VU) | Horario | ✅ Activo |
+| IND-13 | Factor de Diversidad (FD) | Mensual | ✅ Activo |
 
-## Estructura Del Proyecto
+---
 
-```text
-README.md
-2026/
-  CONTEXT.md
-  evisor_indicadores_kpis.md
-  dashboard.py
-  limpieza_datos.ipynb
-  calculo_indicadores_kpis_2026.ipynb
-  visualizaciones_evisor.ipynb
-  etsmartmeter_2026-03-12_17-47-37.xlsx        ← datos crudos del medidor (7 partes)
-  etsmartmeter_2026-03-12_17-49-36_parte_2.xlsx
-  etsmartmeter_2026-03-12_17-51-33_parte_3.xlsx
-  etsmartmeter_2026-03-12_17-53-27_parte_4.xlsx
-  etsmartmeter_2026-03-12_17-55-22_parte_5.xlsx
-  etsmartmeter_2026-03-12_17-57-15_parte_6.xlsx
-  etsmartmeter_2026-03-12_17-59-20_parte_7.xlsx
-  etsmartmeter_clean.csv                        ← salida de limpieza_datos.ipynb
-  etsmartmeter_clean.parquet
-  indicadores_diarios.csv                       ← salida de calculo_indicadores_kpis_2026.ipynb
-  indicadores_diarios.xlsx
-  kpis_diarios.csv
-  kpis_diarios.xlsx
+## KPIs
+
+| # | Nombre | Unidad | Estado |
+|---|---|---|---|
+| KPI-01 | Consumo por m² | kWh/m² | ✅ Real |
+| KPI-02 | Intensidad por usuario | kWh/usuario | ⚠️ DEMO — N_usuarios pendiente |
+| KPI-03 | Pico de demanda | kW + timestamp | ✅ Real |
+| KPI-04 | Ahorro energético verificado | % | ⚠️ DEMO — línea base pendiente |
+| KPI-05 | Emisiones CO₂ | tCO₂e | ✅ Real |
+| KPI-06 | Performance Ratio FV | % | ⚠️ DEMO — datos FV no disponibles |
+| KPI-07 | Autosuficiencia solar | % | ⚠️ DEMO — datos FV no disponibles |
+| KPI-08 | Load Factor | 0–1 | ✅ Real |
+| KPI-09 | Consumo no operacional | % | ✅ Real |
+| KPI-10 | Desbalance de tensión | % | ✅ Real |
+| KPI-11 | Factor de potencia total | — | ✅ Real |
+
+---
+
+## Estructura del Proyecto
+
 ```
+README.md
+_config.yml                          ← configuración GitHub Pages
+2026/
+  CONTEXT.md                         ← contexto y reglas del proyecto
+  ecocampus_kpis_indicadores.json    ← especificación de indicadores y KPIs
+  AREAS 2026.xlsx                    ← áreas construidas por bloque (m²)
+  dashboard.py                       ← dashboard Streamlit (dos pestañas)
+  limpieza_datos.ipynb               ← saneamiento de datos crudos
+  notebook_evisor_calculo.ipynb      ← cálculo de indicadores y KPIs
+  etsmartmeter_*.csv                 ← datos crudos del medidor (6 archivos)
+  etsmartmeter_clean.csv             ← salida de limpieza_datos.ipynb
+  resultados_e-visor.xlsx            ← salida de notebook_evisor_calculo.ipynb
+```
+
+---
+
+## Stack Tecnológico
+
+| Capa | Tecnología |
+|---|---|
+| Fuente de datos | Medidores Landis (`etsmartmeter`) vía FIWARE |
+| Inversores FV | Fronius Bloque 11 · Enphase Bloque 10 |
+| Procesamiento | Python 3.12 · Pandas 2.x · NumPy |
+| Visualización | Streamlit · Plotly · Matplotlib |
+| Almacenamiento | Excel (`.xlsx`) · CSV · Parquet |
+
+---
+
+## Contexto Académico
+
+Proyecto e-Visor — **Universidad Pontificia Bolivariana, Sede Medellín**.  
+Fase A2: diseño de dashboards y cálculo de indicadores (infraestructura IoT operacional).  
+Alineado con ODS 7, 9 y 13 y la Ley 2169 de 2021 (Colombia).

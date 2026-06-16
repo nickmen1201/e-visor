@@ -74,13 +74,116 @@ _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 @st.cache_data
 def cargar_datos():
-    xl = pd.ExcelFile(BASE / 'evisor_resultados.xlsx')
+    xl = pd.ExcelFile(BASE / 'resultados_e-visor.xlsx')
 
-    ind = xl.parse('indicadores_diarios')
-    ind['fecha'] = pd.to_datetime(ind['fecha'])
+    # ── Indicadores: formato largo → ancho diario ─────────────────────────────
+    ind_raw = xl.parse('Indicadores')
+    ind_raw['valor_num'] = pd.to_numeric(ind_raw['valor'], errors='coerce')
 
-    kpi = xl.parse('kpis_diarios')
-    kpi['fecha'] = pd.to_datetime(kpi['fecha'])
+    _IND_MAP = {
+        'IND-01': 'LF',
+        'IND-02': 'PAR',
+        'IND-03': 'f1',
+        'IND-04': 'f2_CV',
+        'IND-05': 'f3',
+        'IND-06': 'f4',
+    }
+    daily_raw = (ind_raw[ind_raw['indicador'].isin(_IND_MAP)]
+                 [['indicador', 'bloque', 'fecha', 'valor_num']]
+                 .dropna(subset=['bloque', 'fecha'])
+                 .copy())
+    daily_raw['fecha'] = pd.to_datetime(daily_raw['fecha'])
+
+    ind = (daily_raw
+           .pivot_table(index=['bloque', 'fecha'], columns='indicador',
+                        values='valor_num', aggfunc='mean')
+           .reset_index())
+    ind.columns.name = None
+    ind.rename(columns=_IND_MAP, inplace=True)
+    ind['bloque'] = ind['bloque'].astype(int)
+
+    # IND-12: desbalance tensión (horario → media diaria por bloque)
+    d12 = (ind_raw[ind_raw['indicador'] == 'IND-12']
+           [['bloque', 'fecha', 'valor_num']]
+           .dropna(subset=['bloque'])
+           .copy())
+    d12['fecha']  = pd.to_datetime(d12['fecha'])
+    d12['bloque'] = d12['bloque'].astype(int)
+    d12 = (d12.groupby(['bloque', 'fecha'])['valor_num']
+              .mean().reset_index()
+              .rename(columns={'valor_num': 'desbalance_pct'}))
+    ind = pd.merge(ind, d12, on=['bloque', 'fecha'], how='outer')
+
+    # IND-07: CO₂ (mensual) → distribuir uniformemente a los días presentes en ind
+    d07 = (ind_raw[ind_raw['indicador'] == 'IND-07']
+           [['bloque', 'mes', 'valor_num']]
+           .dropna(subset=['bloque'])
+           .copy()
+           .rename(columns={'valor_num': 'co2_mes'}))
+    d07['bloque'] = d07['bloque'].astype(int)
+    co2_rows = []
+    for _, row in d07.iterrows():
+        b, mes_str, co2 = int(row['bloque']), row['mes'], row['co2_mes']
+        if pd.isna(co2):
+            continue
+        start = pd.Timestamp(f'{mes_str}-01')
+        end   = start + pd.offsets.MonthEnd(0)
+        mask  = (ind['bloque'] == b) & (ind['fecha'] >= start) & (ind['fecha'] <= end)
+        dates = ind[mask]['fecha'].unique()
+        if len(dates) == 0:
+            continue
+        cpd = co2 / len(dates)
+        for d in dates:
+            co2_rows.append({'bloque': b, 'fecha': d, 'CO2_tCO2e': cpd})
+    if co2_rows:
+        ind = pd.merge(ind, pd.DataFrame(co2_rows), on=['bloque', 'fecha'], how='left')
+    else:
+        ind['CO2_tCO2e'] = np.nan
+
+    ind['entity_id']   = 'SmartMeter_SM_' + ind['bloque'].astype(str)
+    ind['fp_promedio'] = np.nan  # no disponible a resolución diaria en datos nuevos
+    ind['fecha']       = pd.to_datetime(ind['fecha'])
+
+    # ── KPIs: formato largo → ancho mensual ──────────────────────────────────
+    kpi_raw = xl.parse('KPIs')
+    kpi_raw['valor_num']  = pd.to_numeric(kpi_raw['valor'], errors='coerce')
+    kpi_raw['bloque_int'] = pd.to_numeric(kpi_raw['bloque'], errors='coerce')
+    # fecha = último día del mes para que el filtro por rango de fechas capture meses parciales
+    kpi_raw['fecha'] = (pd.to_datetime(kpi_raw['mes'], format='%Y-%m', errors='coerce')
+                        + pd.offsets.MonthEnd(0))
+
+    _KPI_MAP = {
+        'KPI-01': 'KPI01_kwh_m2',
+        'KPI-03': 'KPI03_pico_kw',
+        'KPI-05': 'KPI05_CO2_tCO2e',
+        'KPI-08': 'KPI08_LF',
+        'KPI-09': 'KPI09_f4_pct',
+        'KPI-10': 'KPI10_desbalance_pct',
+        'KPI-11': 'KPI11_fp',
+    }
+    kpi_long = (kpi_raw[kpi_raw['kpi'].isin(_KPI_MAP)]
+                [['kpi', 'bloque_int', 'fecha', 'mes', 'valor_num']]
+                .dropna(subset=['bloque_int'])
+                .copy()
+                .rename(columns={'bloque_int': 'bloque'}))
+    kpi = (kpi_long
+           .pivot_table(index=['bloque', 'fecha', 'mes'],
+                        columns='kpi', values='valor_num', aggfunc='mean')
+           .reset_index())
+    kpi.columns.name = None
+    kpi.rename(columns=_KPI_MAP, inplace=True)
+    kpi['bloque']    = kpi['bloque'].astype(int)
+    kpi['entity_id'] = 'SmartMeter_SM_' + kpi['bloque'].astype(str)
+    kpi['area_m2']   = kpi['bloque'].map(AREAS_BLOQUE)
+    kpi['e_wh']      = kpi['KPI01_kwh_m2'] * kpi['area_m2'] * 1000  # kWh/m²·m²·1000=Wh
+
+    # KPI-03 extra: fecha_pico y hora_pico
+    k03x = (kpi_raw[kpi_raw['kpi'] == 'KPI-03']
+            [['bloque_int', 'fecha', 'fecha_pico', 'hora_pico']]
+            .dropna(subset=['bloque_int'])
+            .rename(columns={'bloque_int': 'bloque'}))
+    k03x['bloque'] = k03x['bloque'].astype(int)
+    kpi = pd.merge(kpi, k03x, on=['bloque', 'fecha'], how='left')
 
     try:
         raw = pd.read_csv(BASE / 'etsmartmeter_clean.csv',
@@ -700,7 +803,10 @@ with st.sidebar:
 # ── Filtrado ──────────────────────────────────────────────────────────────────
 ind_f      = ind[ind['fecha'].between(inicio, fin)].copy()
 ind_fechas = ind_f.copy()   # todos los bloques, mismo rango de fechas
-kpi_f      = kpi[kpi['fecha'].between(inicio, fin)].copy()
+# KPIs son mensuales: incluir todos los meses que caen dentro del rango seleccionado
+inicio_mes = inicio.strftime('%Y-%m')
+fin_mes    = fin.strftime('%Y-%m')
+kpi_f      = kpi[(kpi['mes'] >= inicio_mes) & (kpi['mes'] <= fin_mes)].copy()
 
 if seleccion != "Todos":
     ind_f = ind_f[ind_f['entity_id'] == seleccion]
@@ -1034,14 +1140,14 @@ with tab2:
         for p, a, o in zip(agg['pico'], agg['alerta'], agg['objetivo'])
     ]
     fig, ax = plt.subplots(figsize=(9, max(2.5, 0.5 * len(agg))))
-    ax.barh(agg.index.astype(str), agg['pico'] / 1000, color=colores_k3,
+    ax.barh(agg.index.astype(str), agg['pico'], color=colores_k3,
             edgecolor='none', label='Pico máx.')
-    ax.barh(agg.index.astype(str), agg['alerta'] / 1000, color='none',
+    ax.barh(agg.index.astype(str), agg['alerta'], color='none',
             edgecolor=C_RED, linewidth=1, linestyle='--', label='Alerta (μ+1σ)')
-    ax.barh(agg.index.astype(str), agg['objetivo'] / 1000, color='none',
+    ax.barh(agg.index.astype(str), agg['objetivo'], color='none',
             edgecolor=C_TEAL, linewidth=1, linestyle=':', label='Objetivo (μ−7%)')
-    for i, p in enumerate(agg['pico'] / 1000):
-        ax.text(p + agg['pico'].max() / 1000 * 0.01, i, f'{p:.1f} kW',
+    for i, p in enumerate(agg['pico']):
+        ax.text(p + agg['pico'].max() * 0.01, i, f'{p:.1f} kW',
                 va='center', fontsize=9)
     ax.set_title('KPI 03 — Pico de demanda por bloque', loc='left')
     ax.set_xlabel('kW'); ax.legend(fontsize=9)
@@ -1053,7 +1159,7 @@ with tab2:
 
     # ── KPI 05 — Emisiones de CO₂ (huella de carbono) ────────────────────────
     st.subheader("KPI 05 — Emisiones CO₂ acumuladas vs. meta")
-    actual_diario = (kpi_f[kpi_f['KPI05_CO2_tCO2e'] <= 1.0]
+    actual_diario = (kpi_f
                      .groupby('fecha')['KPI05_CO2_tCO2e'].sum().sort_index())
     actual_acum = actual_diario.cumsum()
 
@@ -1229,21 +1335,23 @@ with tab2:
 
     # ── KPI 11 — Factor de potencia total ────────────────────────────────────
     st.subheader("KPI 11 — Factor de potencia total")
-    serie_fp = ind_f.groupby('fecha')['fp_promedio'].mean().sort_index()
+    serie_fp = kpi_f.groupby('fecha')['KPI11_fp'].mean().sort_index()
     fig, ax = plt.subplots(figsize=(11, 4))
     ax.axhspan(0, UMBRAL_FP_ALERT, color=C_RED,   alpha=0.08)
     ax.axhspan(UMBRAL_FP_ALERT, UMBRAL_FP_OBJ, color=C_AMBER, alpha=0.05)
-    ax.plot(serie_fp.index, serie_fp.values, color=C_PURPLE, linewidth=1.5)
+    ax.plot(serie_fp.index, serie_fp.values, color=C_PURPLE, linewidth=1.5,
+            marker='o', markersize=5)
     ax.axhline(UMBRAL_FP_OBJ,   color=C_TEAL, linestyle=':',  linewidth=1)
     ax.axhline(UMBRAL_FP_ALERT, color=C_RED,  linestyle='--', linewidth=1)
-    ax.text(serie_fp.index[-1], UMBRAL_FP_OBJ,   f'  objetivo {UMBRAL_FP_OBJ}',
-            va='center', fontsize=10, color=C_TEAL)
-    ax.text(serie_fp.index[-1], UMBRAL_FP_ALERT, f'  alerta {UMBRAL_FP_ALERT}',
-            va='center', fontsize=10, color=C_RED)
-    ax.set_ylim(min(UMBRAL_FP_ALERT * 0.95, serie_fp.min() * 0.98), 1.0)
-    ax.set_title('Factor de potencia — evolución diaria', loc='left')
-    ax.set_ylabel('FP (adimensional)')
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
+    if not serie_fp.empty:
+        ax.text(serie_fp.index[-1], UMBRAL_FP_OBJ,   f'  objetivo {UMBRAL_FP_OBJ}',
+                va='center', fontsize=10, color=C_TEAL)
+        ax.text(serie_fp.index[-1], UMBRAL_FP_ALERT, f'  alerta {UMBRAL_FP_ALERT}',
+                va='center', fontsize=10, color=C_RED)
+        ax.set_ylim(min(UMBRAL_FP_ALERT * 0.95, serie_fp.min() * 0.98), 1.0)
+    ax.set_title('Factor de potencia — evolución mensual (mínimo mensual por bloque)', loc='left')
+    ax.set_ylabel('FP mínimo (adimensional)')
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b-%Y'))
     fig.autofmt_xdate(); plt.tight_layout()
     st.pyplot(fig); plt.close(fig)
     _render_tira(kpi_f, 'KPI11_fp', 'KPI 11 — Factor de potencia',
