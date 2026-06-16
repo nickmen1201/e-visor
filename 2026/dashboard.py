@@ -16,13 +16,13 @@ st.set_page_config(page_title="E-Visor · Ecocampus UPB", layout="wide",
                    initial_sidebar_state="expanded")
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
-C_TEAL   = '#1D9E75'
-C_AMBER  = '#EF9F27'
-C_RED    = '#A32D2D'
-C_GRAY   = '#B4B2A9'
-C_BLUE   = '#378ADD'
-C_PURPLE = '#534AB7'
-C_BG     = '#F7F7F5'
+C_TEAL   = '#1A5C38'   # verde oscuro institucional
+C_AMBER  = '#B45309'   # ámbar oscuro / advertencia
+C_RED    = '#8B1A1A'   # rojo profundo / alerta
+C_GRAY   = '#7B8899'   # gris azulado neutro
+C_BLUE   = '#1E3F6E'   # azul marino (comparativos)
+C_PURPLE = '#3D3480'   # índigo profundo
+C_BG     = '#F8F9FA'   # fondo principal
 
 BASE = Path(__file__).parent
 
@@ -80,28 +80,90 @@ _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
-[data-testid="stAppViewContainer"] { background: #F7F7F5; }
-[data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid #E5E3DC; }
-h1 { font-size: 1.6rem !important; font-weight: 700 !important; color: #1A1A18 !important; }
-h2 { font-size: 1.15rem !important; font-weight: 600 !important; color: #2C2C2A !important;
-     border-left: 4px solid #1D9E75; padding-left: 10px; margin-top: 1.8rem !important; }
-h3 { font-size: 1rem !important; font-weight: 600 !important; color: #2C2C2A !important; }
+*, *::before, *::after {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
+                 'Segoe UI', Helvetica, Arial, sans-serif !important;
+}
+
+[data-testid="stAppViewContainer"] { background: #F8F9FA; }
+
+[data-testid="stSidebar"] {
+    background: #FFFFFF;
+    border-right: 1px solid #DDE2EA;
+}
+
+h1 {
+    font-size: 1.45rem !important;
+    font-weight: 600 !important;
+    color: #0D1B2A !important;
+    letter-spacing: -0.015em !important;
+}
+h2 {
+    font-size: 0.65rem !important;
+    font-weight: 600 !important;
+    color: #64748B !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.10em !important;
+    border-bottom: 1px solid #DDE2EA !important;
+    padding-bottom: 7px !important;
+    margin-top: 2.4rem !important;
+    margin-bottom: 0.8rem !important;
+}
+h3 {
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    color: #1B2A3B !important;
+}
+
 div[data-testid="metric-container"] {
-    background: #FFFFFF; border: 1px solid #E5E3DC; border-radius: 10px;
-    padding: 14px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    background: #FFFFFF;
+    border: 1px solid #DDE2EA;
+    border-top: 2px solid #1B2A3B;
+    border-radius: 2px;
+    padding: 16px 20px;
 }
-div[data-testid="metric-container"] label { font-size: .78rem !important; color: #6B6965 !important; }
+div[data-testid="metric-container"] label {
+    font-size: .68rem !important;
+    font-weight: 500 !important;
+    color: #64748B !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.07em !important;
+}
 div[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    font-size: 1.5rem !important; font-weight: 700 !important; color: #1A1A18 !important;
+    font-size: 1.45rem !important;
+    font-weight: 600 !important;
+    color: #0D1B2A !important;
 }
+
 .kpi-card {
-    background: #FFFFFF; border: 1px solid #E5E3DC; border-radius: 10px;
-    padding: 16px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05); height: 100%;
+    background: #FFFFFF;
+    border: 1px solid #DDE2EA;
+    border-top: 2px solid #1B2A3B;
+    border-radius: 2px;
+    padding: 16px 20px;
+    height: 100%;
 }
-.status-verde  { color: #1D9E75; font-weight: 700; }
-.status-ambar  { color: #EF9F27; font-weight: 700; }
-.status-rojo   { color: #A32D2D; font-weight: 700; }
+
+.status-verde { color: #1A5C38; font-weight: 600; }
+.status-ambar { color: #B45309; font-weight: 600; }
+.status-rojo  { color: #8B1A1A; font-weight: 600; }
+
+button[data-baseweb="tab"] p {
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+
+hr { border-color: #DDE2EA !important; margin: 1.2rem 0 !important; }
+
+[data-testid="stCaptionContainer"] p {
+    font-size: 0.73rem !important;
+    color: #64748B !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -283,16 +345,18 @@ def _semaforo(v, obj, alert, mayor_es_mejor=True):
         return C_TEAL if v <= obj else (C_AMBER if v <= alert else C_RED)
 
 
-def _layout_base(fig, h=340):
+def _layout_base(fig, h=360):
     fig.update_layout(
-        plot_bgcolor='white', paper_bgcolor='white',
-        height=h, margin=dict(t=50, b=40, l=60, r=20),
-        font=dict(family='Inter, sans-serif', size=12, color='#2C2C2A'),
+        plot_bgcolor='#FFFFFF', paper_bgcolor='#FFFFFF',
+        height=h, margin=dict(t=48, b=44, l=64, r=24),
+        font=dict(family='IBM Plex Sans, Arial, sans-serif', size=12, color='#1B2A3B'),
         legend=dict(orientation='h', yanchor='bottom', y=1.02,
-                    xanchor='right', x=1, font=dict(size=11)),
+                    xanchor='right', x=1, font=dict(size=11),
+                    bgcolor='rgba(0,0,0,0)', borderwidth=0),
     )
-    fig.update_xaxes(gridcolor='#EEEEEE', linecolor='#DDDDDD')
-    fig.update_yaxes(gridcolor='#EEEEEE', linecolor='#DDDDDD', rangemode='tozero')
+    fig.update_xaxes(gridcolor='#EEF0F3', linecolor='#DDE2EA', tickfont=dict(size=11))
+    fig.update_yaxes(gridcolor='#EEF0F3', linecolor='#DDE2EA', rangemode='tozero',
+                     tickfont=dict(size=11))
     return fig
 
 
@@ -315,15 +379,15 @@ def barras_horizontales(serie, titulo, xlabel, color_fn=None,
                           annotation_text=label, annotation_position='top right',
                           annotation_font_color=color, annotation_font_size=10)
     fig.update_layout(
-        title=dict(text=titulo, font=dict(size=13, color='#1A1A18'), x=0),
+        title=dict(text=titulo, font=dict(size=12, color='#1B2A3B', family='IBM Plex Sans, Arial, sans-serif'), x=0),
         xaxis_title=xlabel,
-        plot_bgcolor='white', paper_bgcolor='white',
-        height=h or max(280, 36 * len(serie) + 100),
-        margin=dict(t=50, b=40, l=90, r=90),
-        font=dict(family='Inter, sans-serif', size=12),
+        plot_bgcolor='#FFFFFF', paper_bgcolor='#FFFFFF',
+        height=h or max(300, 38 * len(serie) + 110),
+        margin=dict(t=48, b=44, l=100, r=100),
+        font=dict(family='IBM Plex Sans, Arial, sans-serif', size=12),
     )
-    fig.update_xaxes(gridcolor='#EEEEEE')
-    fig.update_yaxes(gridcolor='#F0F0F0')
+    fig.update_xaxes(gridcolor='#EEF0F3', linecolor='#DDE2EA')
+    fig.update_yaxes(gridcolor='#EEF0F3', linecolor='#DDE2EA')
     return fig
 
 
@@ -386,7 +450,7 @@ def card_indicador(valor, num_lbl, num_val, den_lbl, den_val,
     ind_kw = dict(
         mode='number+delta' if delta is not None else 'number',
         value=round(float(valor), 3),
-        number=dict(font=dict(size=60, color='#1A1A18', family='Inter'),
+        number=dict(font=dict(size=56, color='#0D1B2A', family='IBM Plex Sans, Arial, sans-serif'),
                     valueformat='.3f', suffix=f' {unidad}' if unidad else ''),
         domain=dict(x=[0.05, 0.95], y=[0.45, 1.0]),
     )
@@ -619,7 +683,7 @@ def tira_estado(kpi_df, col, titulo, color_fn, leyenda):
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## ⚡ E-Visor")
+    st.markdown("## E-Visor")
     st.markdown("**Ecocampus UPB** · Medellín")
     st.divider()
     st.markdown("### Filtros")
@@ -676,7 +740,7 @@ bloque_txt = ("Todos los bloques" if seleccion == "Todos"
               else f"Bloque {_bloque_label(seleccion)}")
 periodo_dias = max(1, (fin - inicio).days + 1)
 
-st.markdown(f"# ⚡ E-Visor — Dashboard energético")
+st.markdown(f"# E-Visor — Sistema de monitoreo energético")
 st.markdown(
     f"**{bloque_txt}** &nbsp;·&nbsp; "
     f"{inicio.strftime('%d %b %Y')} — {fin.strftime('%d %b %Y')} "
@@ -706,51 +770,51 @@ cols_res = st.columns(6)
 with cols_res[0]:
     if total_kwh_campus:
         costo = total_kwh_campus * TARIFA_BASE_COP_KWH
-        st.metric("⚡ Energía consumida", f"{total_kwh_campus:,.0f} kWh",
+        st.metric("Energía consumida", f"{total_kwh_campus:,.0f} kWh",
                   help=f"Costo estimado: ${costo:,.0f} COP (EPM NT1 ene-2026)")
     else:
-        st.metric("⚡ Energía consumida", "—")
+        st.metric("Energía consumida", "—")
 
 with cols_res[1]:
     if co2_total is not None:
-        st.metric("🌍 Emisiones CO₂", f"{co2_total:.3f} tCO₂e",
+        st.metric("Emisiones CO₂", f"{co2_total:.3f} tCO₂e",
                   help=f"≈ {int(co2_total * ARBOLES_POR_TON_CO2):,} árboles jóvenes")
     else:
-        st.metric("🌍 Emisiones CO₂", "—")
+        st.metric("Emisiones CO₂", "—")
 
 with cols_res[2]:
     if lf_medio is not None:
         color_lf = "normal" if lf_medio >= 0.65 else "inverse"
-        st.metric("📊 Load Factor medio", f"{lf_medio:.3f}",
+        st.metric("Load Factor medio", f"{lf_medio:.3f}",
                   delta="≥ 0.65 objetivo" if lf_medio >= 0.65 else "< 0.65 alerta",
                   delta_color=color_lf)
     else:
-        st.metric("📊 Load Factor", "—")
+        st.metric("Load Factor", "—")
 
 with cols_res[3]:
     if pico_max is not None:
-        st.metric("⚡ Pico de demanda", f"{pico_max:.1f} kW",
+        st.metric("Pico de demanda", f"{pico_max:.1f} kW",
                   help="Máximo registrado en el período")
     else:
-        st.metric("⚡ Pico de demanda", "—")
+        st.metric("Pico de demanda", "—")
 
 with cols_res[4]:
     if fp_medio is not None:
-        delta_fp = "✓ objetivo" if fp_medio >= UMBRAL_FP_OBJ else ("⚠ revisar" if fp_medio >= UMBRAL_FP_ALERT else "✗ alerta")
-        st.metric("⚡ Factor de potencia", f"{fp_medio:.3f}",
+        delta_fp = "Cumple objetivo" if fp_medio >= UMBRAL_FP_OBJ else ("Revisar" if fp_medio >= UMBRAL_FP_ALERT else "Alerta")
+        st.metric("Factor de potencia", f"{fp_medio:.3f}",
                   delta=delta_fp,
                   delta_color="normal" if fp_medio >= UMBRAL_FP_OBJ else "inverse")
     else:
-        st.metric("⚡ Factor de potencia", "—")
+        st.metric("Factor de potencia", "—")
 
 with cols_res[5]:
     if db_medio is not None:
-        delta_db = "✓ normal" if db_medio < UMBRAL_DB_OBJ else ("⚠ revisar" if db_medio < UMBRAL_DB_ALERT else "✗ alerta")
-        st.metric("⚖️ Desbalance tensión", f"{db_medio:.2f}%",
+        delta_db = "Normal" if db_medio < UMBRAL_DB_OBJ else ("Revisar" if db_medio < UMBRAL_DB_ALERT else "Alerta")
+        st.metric("Desbalance de tensión", f"{db_medio:.2f}%",
                   delta=delta_db,
                   delta_color="normal" if db_medio < UMBRAL_DB_OBJ else "inverse")
     else:
-        st.metric("⚖️ Desbalance tensión", "—")
+        st.metric("Desbalance de tensión", "—")
 
 st.divider()
 
@@ -758,7 +822,7 @@ st.divider()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ═══════════════════════════════════════════════════════════════════════════════
-tab_ind, tab_kpi = st.tabs(["📈 Indicadores", "🎯 KPIs"])
+tab_ind, tab_kpi = st.tabs(["Indicadores", "KPIs"])
 
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -904,10 +968,10 @@ with tab_ind:
         vehiculos  = total_co2 / TON_CO2_POR_VEHICULO_ANO
 
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("🌍 CO₂ total", f"{total_co2:.3f} tCO₂e")
-        col_m2.metric("🌳 Árboles equiv.", f"{arboles:,}")
-        col_m3.metric("✈️ Vuelos MDE–BOG", f"{vuelos:.1f}")
-        col_m4.metric("🚗 Vehículos/año", f"{vehiculos:.2f}")
+        col_m1.metric("CO₂ total", f"{total_co2:.3f} tCO₂e")
+        col_m2.metric("Árboles equiv.", f"{arboles:,}")
+        col_m3.metric("Vuelos MDE–BOG", f"{vuelos:.1f}")
+        col_m4.metric("Vehículos/año", f"{vehiculos:.2f}")
 
         # Evolución mensual + diaria
         diario   = ind_f.groupby('fecha')['CO2_tCO2e'].sum().sort_index()
@@ -1047,11 +1111,11 @@ with tab_ind:
     for i, (ind_id, sigla, nombre, pendiente) in enumerate(_PEND_INFO):
         with p_cols[i % 2]:
             st.markdown(
-                f'<div style="background:#FFF8EC;border-left:4px solid {C_AMBER};'
-                f'border-radius:8px;padding:14px 18px;margin-bottom:16px">'
-                f'<b style="color:#1A1A18">{ind_id} · {sigla} — {nombre}</b><br>'
-                f'<span style="color:#6B6965;font-size:.88rem">{pendiente}</span><br>'
-                f'<span style="color:{C_AMBER};font-weight:700;font-size:.82rem">⚠ Sin datos — pendiente de integración</span>'
+                f'<div style="background:#FDFAF5;border-left:3px solid {C_AMBER};'
+                f'border-radius:2px;padding:14px 18px;margin-bottom:16px">'
+                f'<b style="color:#0D1B2A;font-family:IBM Plex Sans,sans-serif">{ind_id} · {sigla} — {nombre}</b><br>'
+                f'<span style="color:#64748B;font-size:.85rem;font-family:IBM Plex Sans,sans-serif">{pendiente}</span><br>'
+                f'<span style="color:{C_AMBER};font-weight:600;font-size:.80rem;font-family:IBM Plex Sans,sans-serif">Sin datos — pendiente de integración</span>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -1101,10 +1165,10 @@ with tab_kpi:
             costo_cop      = total_kwh_campus * TARIFA_BASE_COP_KWH
             hogares_meses  = total_kwh_campus / HOGAR_KWH_MES
             cm1, cm2, cm3 = st.columns(3)
-            cm1.metric("⚡ Energía consumida", f"{total_kwh_campus:,.0f} kWh")
-            cm2.metric("💰 Costo estimado", f"${costo_cop:,.0f} COP",
+            cm1.metric("Energía consumida", f"{total_kwh_campus:,.0f} kWh")
+            cm2.metric("Costo estimado", f"${costo_cop:,.0f} COP",
                        help="Tarifa EPM NT1 ene-2026: $859.19 COP/kWh")
-            cm3.metric("🏠 Hogares equivalentes", f"{hogares_meses:,.0f} mes-hogar",
+            cm3.metric("Hogares equivalentes", f"{hogares_meses:,.0f} mes-hogar",
                        help=f"Referencia: {HOGAR_KWH_MES} kWh/mes estrato 1–2")
             st.info(
                 f"En {periodo_dias} días el campus consumió **{total_kwh_campus:,.0f} kWh** "
@@ -1255,10 +1319,10 @@ with tab_kpi:
             ahorro_cop = ahorro_kwh * TARIFA_BASE_COP_KWH
 
             cn1, cn2, cn3 = st.columns(3)
-            cn1.metric("🌙 Energía nocturna", f"{e_noche:,.0f} kWh")
-            cn2.metric("💸 Costo nocturno", f"${costo_noch:,.0f} COP")
+            cn1.metric("Energía nocturna", f"{e_noche:,.0f} kWh")
+            cn2.metric("Costo nocturno", f"${costo_noch:,.0f} COP")
             if ahorro_cop > 0:
-                cn3.metric(f"💡 Ahorro potencial", f"${ahorro_cop:,.0f} COP",
+                cn3.metric("Ahorro potencial", f"${ahorro_cop:,.0f} COP",
                            delta=f"−{ahorro_kwh:,.0f} kWh", delta_color="inverse")
                 st.warning(
                     f"**{pct_noche*100:.1f}%** del consumo ocurre entre 22:00 y 06:00 "
@@ -1266,7 +1330,7 @@ with tab_kpi:
                     f"Reducir al objetivo ({umbral_objetivo_k9:.1f}%) ahorraría **${ahorro_cop:,.0f} COP**."
                 )
             else:
-                cn3.metric("✅ Objetivo cumplido", "—")
+                cn3.metric("Objetivo cumplido", "—")
                 st.success(
                     f"Consumo nocturno: **{pct_noche*100:.1f}%** — por debajo del objetivo "
                     f"({umbral_objetivo_k9:.1f}%). Costo nocturno: **${costo_noch:,.0f} COP**."
@@ -1328,9 +1392,9 @@ with tab_kpi:
     )
 
     # ── KPI 02 — Intensidad por usuario [DEMO] ──────────────────────────────
-    st.markdown("## KPI 02 — Intensidad energética por usuario ⚠")
+    st.markdown("## KPI 02 — Intensidad energética por usuario")
     st.warning(
-        "⚠ **DEMO — Valor de referencia:** N° de usuarios (estudiantes + docentes + administrativos) "
+        "**DEMO — Valor de referencia:** N° de usuarios (estudiantes + docentes + administrativos) "
         "sin confirmar. Referencia utilizada: 3 500 usuarios totales."
     )
     k02 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-02'].copy()
@@ -1353,9 +1417,9 @@ with tab_kpi:
         st.info("KPI 02 sin valores para el período seleccionado.")
 
     # ── KPI 04 — Ahorro verificado [DEMO] ────────────────────────────────────
-    st.markdown("## KPI 04 — Ahorro energético verificado ⚠")
+    st.markdown("## KPI 04 — Ahorro energético verificado")
     st.warning(
-        "⚠ **DEMO — Valor de referencia:** Requiere línea base de ≥ 12 meses de historial. "
+        "**DEMO — Valor de referencia:** Requiere línea base de ≥ 12 meses de historial. "
         "Meta establecida: ≥ 3% de reducción anual respecto al año anterior."
     )
     k04 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-04'].copy()
@@ -1383,9 +1447,9 @@ with tab_kpi:
         st.info("KPI 04 sin valores para el período seleccionado.")
 
     # ── KPI 06 — Performance Ratio FV [DEMO] ─────────────────────────────────
-    st.markdown("## KPI 06 — Performance Ratio (PR) fotovoltaico ⚠")
+    st.markdown("## KPI 06 — Performance Ratio (PR) fotovoltaico")
     st.warning(
-        "⚠ **DEMO — Valor de referencia:** Datos de irradiación solar y capacidad kWp instalada "
+        "**DEMO — Valor de referencia:** Datos de irradiación solar y capacidad kWp instalada "
         "sin confirmar (integración Fronius pendiente). Referencia: PR ≥ 0.73."
     )
     k06 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-06'].copy()
@@ -1419,9 +1483,9 @@ with tab_kpi:
         st.info("KPI 06 sin valores para el período seleccionado.")
 
     # ── KPI 07 — Autosuficiencia solar [DEMO] ────────────────────────────────
-    st.markdown("## KPI 07 — Autosuficiencia solar (SS) ⚠")
+    st.markdown("## KPI 07 — Autosuficiencia solar (SS)")
     st.warning(
-        "⚠ **DEMO — Valor de referencia:** Exportación de energía solar al campus sin confirmar. "
+        "**DEMO — Valor de referencia:** Exportación de energía solar al campus sin confirmar. "
         "Referencia: SS ≥ 12%."
     )
     k07 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-07'].copy()
