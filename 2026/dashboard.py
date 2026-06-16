@@ -186,6 +186,23 @@ def cargar_datos():
     k03x['bloque'] = k03x['bloque'].astype(int)
     kpi = pd.merge(kpi, k03x, on=['bloque', 'fecha'], how='left')
 
+    # ── DEMO KPIs (bloque puede ser texto: 'CAMPUS_TOTAL', 'Bloques 10-11') ──
+    _KPI_DEMO_IDS = ['KPI-02', 'KPI-04', 'KPI-06', 'KPI-07']
+    kpi_demo = (kpi_raw[kpi_raw['kpi'].isin(_KPI_DEMO_IDS)]
+                [['kpi', 'bloque', 'mes', 'valor_num', 'estado', 'unidad']]
+                .copy())
+    kpi_demo['fecha'] = (pd.to_datetime(kpi_demo['mes'], format='%Y-%m', errors='coerce')
+                         + pd.offsets.MonthEnd(0))
+
+    # ── IND-13 — Factor de Diversidad (campus) ────────────────────────────────
+    ind13 = (ind_raw[ind_raw['indicador'] == 'IND-13']
+             [['mes', 'valor_num']]
+             .dropna(subset=['valor_num'])
+             .copy())
+    # fecha puede ser NaT; derivar del campo mes (formato 'YYYY-MM')
+    ind13['fecha'] = (pd.to_datetime(ind13['mes'], format='%Y-%m', errors='coerce')
+                      + pd.offsets.MonthEnd(0))
+
     try:
         raw = pd.read_csv(BASE / 'etsmartmeter_clean.csv',
                           parse_dates=['time_index_colombia'])
@@ -194,10 +211,10 @@ def cargar_datos():
     except FileNotFoundError:
         raw = None
 
-    return ind, kpi, raw
+    return ind, kpi, raw, kpi_demo, ind13
 
 
-ind, kpi, raw = cargar_datos()
+ind, kpi, raw, kpi_demo, ind13 = cargar_datos()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -597,6 +614,9 @@ inicio_mes = inicio.strftime('%Y-%m')
 fin_mes    = fin.strftime('%Y-%m')
 kpi_f      = kpi[(kpi['mes'] >= inicio_mes) & (kpi['mes'] <= fin_mes)].copy()
 
+kpi_demo_f = kpi_demo[(kpi_demo['mes'] >= inicio_mes) & (kpi_demo['mes'] <= fin_mes)].copy()
+ind13_f    = ind13[(ind13['mes'] >= inicio_mes) & (ind13['mes'] <= fin_mes)].copy() if not ind13.empty else pd.DataFrame()
+
 if seleccion != "Todos":
     ind_f = ind_f[ind_f['entity_id'] == seleccion]
     kpi_f = kpi_f[kpi_f['entity_id'] == seleccion]
@@ -974,6 +994,60 @@ with tab_ind:
                                     showlegend=False, xaxis_title='Fecha', yaxis_title='%')
             _chart(_layout_base(fig_db_ev), use_container_width=True)
 
+    # ── IND-13 — Factor de Diversidad del campus ────────────────────────────
+    st.markdown("## FD — Factor de Diversidad del campus")
+    if not ind13_f.empty:
+        fd_vals = ind13_f.sort_values('fecha')
+        fig_fd = go.Figure(go.Bar(
+            x=[f.strftime('%b %Y') for f in fd_vals['fecha']],
+            y=fd_vals['valor_num'].values,
+            marker_color=C_TEAL,
+            text=[f'{v:.3f}' for v in fd_vals['valor_num']],
+            textposition='outside',
+            hovertemplate='%{x}: FD = %{y:.3f}<extra></extra>',
+        ))
+        fig_fd.add_hline(y=1.0, line_color=C_GRAY, line_dash='dot',
+                         annotation_text='FD = 1 (sin diversidad)', annotation_position='top left',
+                         annotation_font_color=C_GRAY)
+        fig_fd.update_layout(
+            title=dict(text='IND-13 — Factor de Diversidad mensual del campus', font=dict(size=13), x=0),
+            xaxis_title='Mes', yaxis_title='FD (adimensional)',
+        )
+        _chart(_layout_base(fig_fd, h=320), use_container_width=True)
+        fd_mean = float(fd_vals['valor_num'].mean())
+        st.caption(
+            f"FD = Σ(pico individual de cada bloque) / pico simultáneo del campus. "
+            f"FD > 1 indica diversidad temporal de picos — cuanto mayor, mejor la distribución. "
+            f"Promedio período: **{fd_mean:.3f}**"
+        )
+    else:
+        st.info("IND-13 (Factor de Diversidad) sin datos para el rango seleccionado.")
+
+    # ── Indicadores en integración (PENDIENTE) ──────────────────────────────
+    st.markdown("## Indicadores en integración")
+    _PEND_INFO = [
+        ('IND-08', 'IGS', 'Índice de generación solar (Yield Factor FV)',
+         'Pendiente: registros de generación FV + capacidad instalada kWp (integración Fronius).'),
+        ('IND-09', 'TCP', 'Temperatura de panel fotovoltaico',
+         'Pendiente: configuración de sensor Fronius de temperatura de panel.'),
+        ('IND-10', 'EB',  'Eficiencia de batería (Energy Balance)',
+         'Pendiente: datos del inversor/batería no disponibles aún.'),
+        ('IND-11', 'Ahorro', 'Ahorro energético verificado',
+         'Pendiente: se requiere línea base de ≥ 12 meses de operación histórica.'),
+    ]
+    p_cols = st.columns(2)
+    for i, (ind_id, sigla, nombre, pendiente) in enumerate(_PEND_INFO):
+        with p_cols[i % 2]:
+            st.markdown(
+                f'<div style="background:#FFF8EC;border-left:4px solid {C_AMBER};'
+                f'border-radius:8px;padding:14px 18px;margin-bottom:16px">'
+                f'<b style="color:#1A1A18">{ind_id} · {sigla} — {nombre}</b><br>'
+                f'<span style="color:#6B6965;font-size:.88rem">{pendiente}</span><br>'
+                f'<span style="color:{C_AMBER};font-weight:700;font-size:.82rem">⚠ Sin datos — pendiente de integración</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
 
 # ───────────────────────────────────────────────────────────────────────────────
 # TAB 2 — KPIs
@@ -1237,3 +1311,131 @@ with tab_kpi:
         lambda v: _semaforo(v, UMBRAL_FP_OBJ, UMBRAL_FP_ALERT),
         f'verde ≥ {UMBRAL_FP_OBJ}\nnaranja ≥ {UMBRAL_FP_ALERT}\nrojo < {UMBRAL_FP_ALERT}',
     ), use_container_width=True)
+
+    # ── KPIs en integración / validación (DEMO) ──────────────────────────────
+    st.markdown("## KPIs en integración / validación")
+    st.info(
+        "Los siguientes KPIs muestran **valores de referencia (DEMO)** porque sus fuentes de datos "
+        "aún no están confirmadas. Se actualizarán automáticamente cuando se integren los datos reales."
+    )
+
+    # ── KPI 02 — Intensidad por usuario [DEMO] ──────────────────────────────
+    st.markdown("## KPI 02 — Intensidad energética por usuario ⚠")
+    st.warning(
+        "⚠ **DEMO — Valor de referencia:** N° de usuarios (estudiantes + docentes + administrativos) "
+        "sin confirmar. Referencia utilizada: 3 500 usuarios totales."
+    )
+    k02 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-02'].copy()
+    if not k02.empty and k02['valor_num'].dropna().shape[0] > 0:
+        k02_mes = k02.groupby('mes')['valor_num'].mean().sort_index()
+        fig_k02 = go.Figure(go.Bar(
+            x=k02_mes.index, y=k02_mes.values,
+            marker_color=C_AMBER,
+            text=[f'{v:.2f}' for v in k02_mes.values], textposition='outside',
+            hovertemplate='%{x}: %{y:.2f} kWh/usuario<extra></extra>',
+        ))
+        fig_k02.update_layout(
+            title=dict(text='KPI 02 — kWh/usuario mensual (DEMO)', font=dict(size=13), x=0),
+            xaxis_title='Mes', yaxis_title='kWh/usuario',
+        )
+        _chart(_layout_base(fig_k02, h=300), use_container_width=True)
+        estado_k02 = k02['estado'].dropna().iloc[0] if not k02['estado'].dropna().empty else 'DEMO'
+        st.caption(f"Estado: {estado_k02} · Unidad: kWh/usuario")
+    else:
+        st.info("KPI 02 sin valores para el período seleccionado.")
+
+    # ── KPI 04 — Ahorro verificado [DEMO] ────────────────────────────────────
+    st.markdown("## KPI 04 — Ahorro energético verificado ⚠")
+    st.warning(
+        "⚠ **DEMO — Valor de referencia:** Requiere línea base de ≥ 12 meses de historial. "
+        "Meta establecida: ≥ 3% de reducción anual respecto al año anterior."
+    )
+    k04 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-04'].copy()
+    if not k04.empty and k04['valor_num'].dropna().shape[0] > 0:
+        META_K04   = 3.0
+        val_k04    = float(k04['valor_num'].dropna().iloc[0])
+        color_k04  = C_TEAL if val_k04 >= META_K04 else C_AMBER
+        col_k4a, col_k4b = st.columns([1, 2])
+        with col_k4a:
+            st.metric("Ahorro de referencia (DEMO)", f"{val_k04:.2f}%",
+                      delta=f"meta ≥ {META_K04:.0f}%",
+                      delta_color="normal" if val_k04 >= META_K04 else "inverse")
+        with col_k4b:
+            st.markdown(
+                f'<div style="background:#FFF8EC;border-left:4px solid {color_k04};'
+                f'border-radius:8px;padding:12px 16px">'
+                f'El valor <b>{val_k04:.2f}%</b> es un estimado de referencia calculado con la energía '
+                f'disponible hasta la fecha (< 12 meses de historial). '
+                f'La meta es <b>≥ {META_K04:.0f}% de reducción anual</b> respecto al año anterior.</div>',
+                unsafe_allow_html=True,
+            )
+        estado_k04 = k04['estado'].dropna().iloc[0] if not k04['estado'].dropna().empty else 'DEMO'
+        st.caption(f"Estado: {estado_k04} · El valor es constante por bloque (referencia campus).")
+    else:
+        st.info("KPI 04 sin valores para el período seleccionado.")
+
+    # ── KPI 06 — Performance Ratio FV [DEMO] ─────────────────────────────────
+    st.markdown("## KPI 06 — Performance Ratio (PR) fotovoltaico ⚠")
+    st.warning(
+        "⚠ **DEMO — Valor de referencia:** Datos de irradiación solar y capacidad kWp instalada "
+        "sin confirmar (integración Fronius pendiente). Referencia: PR ≥ 0.73."
+    )
+    k06 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-06'].copy()
+    if not k06.empty and k06['valor_num'].dropna().shape[0] > 0:
+        META_K06_OBJ = 0.73
+        META_K06_ALT = 0.60
+        k06_mes = k06.groupby('mes')['valor_num'].mean().sort_index()
+        colores_k06 = [_semaforo(v, META_K06_OBJ, META_K06_ALT) for v in k06_mes.values]
+        fig_k06 = go.Figure()
+        fig_k06.add_hrect(y0=META_K06_OBJ, y1=1.05, fillcolor=C_TEAL, opacity=0.05, line_width=0)
+        fig_k06.add_hrect(y0=META_K06_ALT, y1=META_K06_OBJ, fillcolor=C_AMBER, opacity=0.07, line_width=0)
+        fig_k06.add_trace(go.Scatter(
+            x=k06_mes.index, y=k06_mes.values, mode='lines+markers',
+            line=dict(color=C_PURPLE, width=2),
+            marker=dict(color=colores_k06, size=9, line=dict(color='white', width=1)),
+            hovertemplate='%{x}: PR = %{y:.3f}<extra></extra>',
+            showlegend=False,
+        ))
+        fig_k06.add_hline(y=META_K06_OBJ, line_color=C_TEAL, line_dash='dot',
+                          annotation_text='objetivo 0.73', annotation_position='top right',
+                          annotation_font_color=C_TEAL)
+        fig_k06.update_layout(
+            title=dict(text='KPI 06 — Performance Ratio FV mensual (DEMO)', font=dict(size=13), x=0),
+            xaxis_title='Mes', yaxis_title='PR (adimensional)',
+        )
+        _chart(_layout_base(fig_k06, h=300), use_container_width=True)
+        estado_k06 = k06['estado'].dropna().iloc[0] if not k06['estado'].dropna().empty else 'DEMO'
+        bloq_k06   = k06['bloque'].dropna().iloc[0] if not k06['bloque'].dropna().empty else '?'
+        st.caption(f"Bloques FV: {bloq_k06} · Estado: {estado_k06}")
+    else:
+        st.info("KPI 06 sin valores para el período seleccionado.")
+
+    # ── KPI 07 — Autosuficiencia solar [DEMO] ────────────────────────────────
+    st.markdown("## KPI 07 — Autosuficiencia solar (SS) ⚠")
+    st.warning(
+        "⚠ **DEMO — Valor de referencia:** Exportación de energía solar al campus sin confirmar. "
+        "Referencia: SS ≥ 12%."
+    )
+    k07 = kpi_demo_f[kpi_demo_f['kpi'] == 'KPI-07'].copy()
+    if not k07.empty and k07['valor_num'].dropna().shape[0] > 0:
+        META_K07 = 12.0
+        k07_mes = k07.groupby('mes')['valor_num'].mean().sort_index()
+        colores_k07 = [C_TEAL if v >= META_K07 else C_AMBER for v in k07_mes.values]
+        fig_k07 = go.Figure(go.Bar(
+            x=k07_mes.index, y=k07_mes.values,
+            marker_color=colores_k07,
+            text=[f'{v:.1f}%' for v in k07_mes.values], textposition='outside',
+            hovertemplate='%{x}: SS = %{y:.1f}%<extra></extra>',
+        ))
+        fig_k07.add_hline(y=META_K07, line_color=C_TEAL, line_dash='dot',
+                          annotation_text='objetivo 12%', annotation_position='top right',
+                          annotation_font_color=C_TEAL)
+        fig_k07.update_layout(
+            title=dict(text='KPI 07 — Autosuficiencia solar % mensual (DEMO)', font=dict(size=13), x=0),
+            xaxis_title='Mes', yaxis_title='%',
+        )
+        _chart(_layout_base(fig_k07, h=300), use_container_width=True)
+        estado_k07 = k07['estado'].dropna().iloc[0] if not k07['estado'].dropna().empty else 'DEMO'
+        st.caption(f"Estado: {estado_k07}")
+    else:
+        st.info("KPI 07 sin valores para el período seleccionado.")
