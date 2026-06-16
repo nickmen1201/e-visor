@@ -92,7 +92,8 @@ st.markdown("""
 
 [data-testid="stSidebar"] {
     background: #FFFFFF;
-    border-right: 1px solid #DDE2EA;
+    border-right: 3px solid transparent;
+    border-image: linear-gradient(180deg, #FF003D 0%, #AD3DFF 100%) 1;
 }
 
 h1 {
@@ -121,7 +122,7 @@ h3 {
 div[data-testid="metric-container"] {
     background: #FFFFFF;
     border: 1px solid #DDE2EA;
-    border-top: 2px solid #1B2A3B;
+    border-top: 3px solid #FF003D;
     border-radius: 2px;
     padding: 16px 20px;
 }
@@ -141,7 +142,7 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
 .kpi-card {
     background: #FFFFFF;
     border: 1px solid #DDE2EA;
-    border-top: 2px solid #1B2A3B;
+    border-top: 3px solid #FF003D;
     border-radius: 2px;
     padding: 16px 20px;
     height: 100%;
@@ -683,8 +684,22 @@ def tira_estado(kpi_df, col, titulo, color_fn, leyenda):
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## E-Visor")
-    st.markdown("**Ecocampus UPB** · Medellín")
+    _logo_path = BASE / 'Logo-UPB-2022.svg'
+    if _logo_path.exists():
+        _svg = _logo_path.read_text(encoding='utf-8').replace(
+            'x="0px" y="0px"', 'x="0px" y="0px" width="100%" height="auto"'
+        )
+        st.markdown(
+            f'<div style="padding:20px 12px 8px 12px">{_svg}</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown(
+        '<div style="padding:4px 4px 2px 4px;font-size:1.05rem;font-weight:600;'
+        'color:#0D1B2A;letter-spacing:-0.01em">E-Visor</div>'
+        '<div style="padding:0 4px 12px 4px;font-size:0.75rem;color:#64748B;'
+        'letter-spacing:0.02em">Ecocampus UPB · Medellín</div>',
+        unsafe_allow_html=True,
+    )
     st.divider()
     st.markdown("### Filtros")
 
