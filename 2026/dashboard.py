@@ -774,99 +774,76 @@ with tab_ind:
 
     # ── LF — Load Factor ────────────────────────────────────────────────────
     st.markdown("## LF — Factor de carga")
-    col_a, col_b = st.columns([1, 1])
-    with col_a:
-        fig_lf_bar = barras_horizontales(
-            ind_f.assign(bloque=ind_f['entity_id'].map(_bloque_label))
-                 .groupby('bloque')['LF'].mean().sort_values(),
-            titulo='LF medio por bloque',
-            xlabel='Factor de carga (0–1)',
-            color_fn=lambda v: _semaforo(v, 0.65, 0.50),
-            ref_lines=[(0.65, C_TEAL, 'objetivo 0.65')],
-        )
-        _chart(fig_lf_bar, use_container_width=True)
-    with col_b:
-        _chart(serie_diaria(ind_f, 'LF', 'LF (adimensional)'),
-                        use_container_width=True)
+    fig_lf_bar = barras_horizontales(
+        ind_f.assign(bloque=ind_f['entity_id'].map(_bloque_label))
+             .groupby('bloque')['LF'].mean().sort_values(),
+        titulo='LF medio por bloque',
+        xlabel='Factor de carga (0–1)',
+        color_fn=lambda v: _semaforo(v, 0.65, 0.50),
+        ref_lines=[(0.65, C_TEAL, 'objetivo 0.65')],
+    )
+    _chart(fig_lf_bar, use_container_width=True)
+    _chart(serie_diaria(ind_f, 'LF', 'LF (adimensional)'), use_container_width=True)
 
     # ── PAR — Peak-to-Average Ratio ─────────────────────────────────────────
     st.markdown("## PAR — Peak-to-Average Ratio")
-    col_a, col_b = st.columns([1, 1])
-    with col_a:
-        fig_par_bar = barras_horizontales(
-            ind_f.assign(bloque=ind_f['entity_id'].map(_bloque_label))
-                 .groupby('bloque')['PAR'].mean().sort_values(),
-            titulo='PAR medio por bloque',
-            xlabel='PAR (>1 = picos pronunciados)',
-            color_fn=lambda v: _semaforo(v, 1.54, 2.0, mayor_es_mejor=False),
-        )
-        _chart(fig_par_bar, use_container_width=True)
-    with col_b:
-        _chart(serie_diaria(ind_f, 'PAR', 'PAR (adimensional)'),
-                        use_container_width=True)
+    fig_par_bar = barras_horizontales(
+        ind_f.assign(bloque=ind_f['entity_id'].map(_bloque_label))
+             .groupby('bloque')['PAR'].mean().sort_values(),
+        titulo='PAR medio por bloque',
+        xlabel='PAR (>1 = picos pronunciados)',
+        color_fn=lambda v: _semaforo(v, 1.54, 2.0, mayor_es_mejor=False),
+    )
+    _chart(fig_par_bar, use_container_width=True)
+    _chart(serie_diaria(ind_f, 'PAR', 'PAR (adimensional)'), use_container_width=True)
 
     # ── f₁ — Uniformidad diurna ─────────────────────────────────────────────
     st.markdown("## f₁ — Uniformidad de franja diurna")
     _d1, _r1, _fr1 = _delta_semana(ind_f, 'f1')
-    _fh1 = ind_f['fecha'].max()
-    _v1  = ind_f[ind_f['fecha'] == _fh1]['f1'].mean()
+    _f1_valid = ind_f[ind_f['f1'].notna()]
+    _fh1 = _f1_valid['fecha'].max() if not _f1_valid.empty else pd.NaT
+    _v1  = _f1_valid[_f1_valid['fecha'] == _fh1]['f1'].mean() if not _f1_valid.empty else float('nan')
 
-    col_a, col_b, col_c = st.columns([1, 1.5, 1])
-    with col_a:
+    if pd.notna(_v1) and pd.notna(_fh1):
         _chart(card_indicador(
             _v1, 'P̄ op.', _comp['prom'] if _comp else None,
             'P_max op.', _comp['max'] if _comp else None,
             _d1, _r1, _fr1, _fh1), use_container_width=True)
-    with col_b:
-        _chart(serie_diaria(ind_f, 'f1', 'f₁ (adimensional)'),
-                        use_container_width=True)
-    with col_c:
-        _chart(graficar_evidencia_f1(_comp), use_container_width=True)
-
-    _chart(comparativo_bloques(ind_fechas, 'f1', 'f₁ (adimensional)'),
-                    use_container_width=True)
+    _chart(serie_diaria(ind_f, 'f1', 'f₁ (adimensional)'), use_container_width=True)
+    _chart(graficar_evidencia_f1(_comp), use_container_width=True)
+    _chart(comparativo_bloques(ind_fechas, 'f1', 'f₁ (adimensional)'), use_container_width=True)
 
     # ── f₂ — CV de carga ────────────────────────────────────────────────────
     st.markdown("## f₂ — Coeficiente de variación de carga")
     _d2, _r2, _fr2 = _delta_semana(ind_f, 'f2_CV')
-    _fh2 = ind_f['fecha'].max()
-    _v2  = ind_f[ind_f['fecha'] == _fh2]['f2_CV'].mean()
+    _f2_valid = ind_f[ind_f['f2_CV'].notna()]
+    _fh2 = _f2_valid['fecha'].max() if not _f2_valid.empty else pd.NaT
+    _v2  = _f2_valid[_f2_valid['fecha'] == _fh2]['f2_CV'].mean() if not _f2_valid.empty else float('nan')
 
-    col_a, col_b, col_c = st.columns([1, 1.5, 1])
-    with col_a:
+    if pd.notna(_v2) and pd.notna(_fh2):
         _chart(card_indicador(
             _v2, 'σ op.', _comp['std'] if _comp else None,
             'P̄ op.', _comp['prom'] if _comp else None,
             _d2, _r2, _fr2, _fh2), use_container_width=True)
-    with col_b:
-        _chart(serie_diaria(ind_f, 'f2_CV', 'f₂ (adimensional)'),
-                        use_container_width=True)
-    with col_c:
-        _chart(graficar_evidencia_f2(_comp), use_container_width=True)
-
-    _chart(comparativo_bloques(ind_fechas, 'f2_CV', 'f₂ (adimensional)'),
-                    use_container_width=True)
+    _chart(serie_diaria(ind_f, 'f2_CV', 'f₂ (adimensional)'), use_container_width=True)
+    _chart(graficar_evidencia_f2(_comp), use_container_width=True)
+    _chart(comparativo_bloques(ind_fechas, 'f2_CV', 'f₂ (adimensional)'), use_container_width=True)
 
     # ── f₃ — Mínimo–promedio ────────────────────────────────────────────────
     st.markdown("## f₃ — Relación mínimo–promedio")
     _d3, _r3, _fr3 = _delta_semana(ind_f, 'f3')
-    _fh3 = ind_f['fecha'].max()
-    _v3  = ind_f[ind_f['fecha'] == _fh3]['f3'].mean()
+    _f3_valid = ind_f[ind_f['f3'].notna()]
+    _fh3 = _f3_valid['fecha'].max() if not _f3_valid.empty else pd.NaT
+    _v3  = _f3_valid[_f3_valid['fecha'] == _fh3]['f3'].mean() if not _f3_valid.empty else float('nan')
 
-    col_a, col_b, col_c = st.columns([1, 1.5, 1])
-    with col_a:
+    if pd.notna(_v3) and pd.notna(_fh3):
         _chart(card_indicador(
             _v3, 'P_min op.', _comp['min'] if _comp else None,
             'P̄ op.', _comp['prom'] if _comp else None,
             _d3, _r3, _fr3, _fh3), use_container_width=True)
-    with col_b:
-        _chart(serie_diaria(ind_f, 'f3', 'f₃ (adimensional)'),
-                        use_container_width=True)
-    with col_c:
-        _chart(graficar_evidencia_f3(_comp), use_container_width=True)
-
-    _chart(comparativo_bloques(ind_fechas, 'f3', 'f₃ (adimensional)'),
-                    use_container_width=True)
+    _chart(serie_diaria(ind_f, 'f3', 'f₃ (adimensional)'), use_container_width=True)
+    _chart(graficar_evidencia_f3(_comp), use_container_width=True)
+    _chart(comparativo_bloques(ind_fechas, 'f3', 'f₃ (adimensional)'), use_container_width=True)
 
     # ── f₄ — Carga no operacional ────────────────────────────────────────────
     st.markdown("## f₄ — Factor de carga no operacional")
@@ -885,39 +862,36 @@ with tab_ind:
         f4_ref   = cand_f4.iloc[-1]['f4'] if not cand_f4.empty else None
         delta_f4 = float(hoy_f4['f4']) - float(f4_ref) if f4_ref is not None else None
 
-        col_a, col_b = st.columns([1, 2])
-        with col_a:
-            fig_f4_card = card_indicador(
-                hoy_f4['f4'],
-                'P̄ no-op', hoy_f4.get('p_no_op') if pd.notna(hoy_f4.get('p_no_op', np.nan)) else None,
-                'P̄ op',    hoy_f4.get('p_op')    if pd.notna(hoy_f4.get('p_op',    np.nan)) else None,
-                delta_f4, f4_ref,
-                cand_f4.index[-1] if not cand_f4.empty else None,
-                fecha_hoy_f4,
-            )
-            _chart(fig_f4_card, use_container_width=True)
-        with col_b:
-            df_f4 = f4_diario.sort_index().copy()
-            df_f4['es_finde'] = df_f4.index.dayofweek >= 5
-            df_f4['ma7']      = df_f4['f4'].rolling(7, min_periods=1).mean()
-            fig_f4_ev = go.Figure()
-            fig_f4_ev.add_trace(go.Scatter(
-                x=df_f4[~df_f4['es_finde']].index, y=df_f4[~df_f4['es_finde']]['f4'],
-                mode='lines+markers', name='Día hábil',
-                line=dict(color=C_TEAL, width=1.8), marker=dict(color=C_TEAL, size=5),
-            ))
-            fig_f4_ev.add_trace(go.Scatter(
-                x=df_f4[df_f4['es_finde']].index, y=df_f4[df_f4['es_finde']]['f4'],
-                mode='markers', name='Fin de semana',
-                marker=dict(color=C_AMBER, size=8, symbol='diamond'),
-            ))
-            fig_f4_ev.add_trace(go.Scatter(
-                x=df_f4.index, y=df_f4['ma7'], mode='lines', name='MA7',
-                line=dict(color=C_GRAY, width=2.5, dash='dot'), opacity=0.8,
-            ))
-            fig_f4_ev.update_layout(title=dict(text='Evolución diaria f₄', font=dict(size=13), x=0),
-                                    xaxis_title='Fecha', yaxis_title='f₄')
-            _chart(_layout_base(fig_f4_ev), use_container_width=True)
+        fig_f4_card = card_indicador(
+            hoy_f4['f4'],
+            'P̄ no-op', hoy_f4.get('p_no_op') if pd.notna(hoy_f4.get('p_no_op', np.nan)) else None,
+            'P̄ op',    hoy_f4.get('p_op')    if pd.notna(hoy_f4.get('p_op',    np.nan)) else None,
+            delta_f4, f4_ref,
+            cand_f4.index[-1] if not cand_f4.empty else None,
+            fecha_hoy_f4,
+        )
+        _chart(fig_f4_card, use_container_width=True)
+        df_f4 = f4_diario.sort_index().copy()
+        df_f4['es_finde'] = df_f4.index.dayofweek >= 5
+        df_f4['ma7']      = df_f4['f4'].rolling(7, min_periods=1).mean()
+        fig_f4_ev = go.Figure()
+        fig_f4_ev.add_trace(go.Scatter(
+            x=df_f4[~df_f4['es_finde']].index, y=df_f4[~df_f4['es_finde']]['f4'],
+            mode='lines+markers', name='Día hábil',
+            line=dict(color=C_TEAL, width=1.8), marker=dict(color=C_TEAL, size=5),
+        ))
+        fig_f4_ev.add_trace(go.Scatter(
+            x=df_f4[df_f4['es_finde']].index, y=df_f4[df_f4['es_finde']]['f4'],
+            mode='markers', name='Fin de semana',
+            marker=dict(color=C_AMBER, size=8, symbol='diamond'),
+        ))
+        fig_f4_ev.add_trace(go.Scatter(
+            x=df_f4.index, y=df_f4['ma7'], mode='lines', name='MA7',
+            line=dict(color=C_GRAY, width=2.5, dash='dot'), opacity=0.8,
+        ))
+        fig_f4_ev.update_layout(title=dict(text='Evolución diaria f₄', font=dict(size=13), x=0),
+                                xaxis_title='Fecha', yaxis_title='f₄')
+        _chart(_layout_base(fig_f4_ev), use_container_width=True)
 
     if raw_f is not None and not raw_f.empty:
         _chart(heatmap_semanal(raw_f), use_container_width=True)
