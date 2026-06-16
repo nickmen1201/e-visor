@@ -117,6 +117,17 @@ def _parse_bloque(b):
         return s  # "Ecovilla", "CAMPUS_TOTAL"
 
 
+def _entity_id_for(bloque):
+    key = str(bloque)
+    return _BLOQUE_TO_ENTITY.get(key, f'SmartMeter_SM_{bloque}')
+
+
+def _bloque_label(entity_id):
+    if entity_id in _ENTITY_TO_LABEL:
+        return _ENTITY_TO_LABEL[entity_id]
+    return entity_id.replace('SmartMeter_SM_', 'B')
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CARGA DE DATOS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -249,16 +260,6 @@ ind, kpi, raw, kpi_demo, ind13 = cargar_datos()
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _bloque_label(entity_id):
-    if entity_id in _ENTITY_TO_LABEL:
-        return _ENTITY_TO_LABEL[entity_id]
-    return entity_id.replace('SmartMeter_SM_', 'B')
-
-
-def _entity_id_for(bloque):
-    """Construye el entity_id canónico a partir del valor de bloque."""
-    key = str(bloque)
-    return _BLOQUE_TO_ENTITY.get(key, f'SmartMeter_SM_{bloque}')
 
 
 def _delta_semana(ind_df, col):
