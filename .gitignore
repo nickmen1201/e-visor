@@ -2,9 +2,6 @@
 2026/etsmartmeter_*.csv
 2026/etsmartmeter_*.xlsx
 
-# ── Salidas del pipeline (archivos derivados, no código fuente) ───────────────
-2026/etsmartmeter_clean.csv
-2026/etsmartmeter_clean.parquet
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
