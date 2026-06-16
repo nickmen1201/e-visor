@@ -810,7 +810,6 @@ with tab_ind:
             'P_max op.', _comp['max'] if _comp else None,
             _d1, _r1, _fr1, _fh1), use_container_width=True)
     _chart(serie_diaria(ind_f, 'f1', 'f₁ (adimensional)'), use_container_width=True)
-    _chart(graficar_evidencia_f1(_comp), use_container_width=True)
     _chart(comparativo_bloques(ind_fechas, 'f1', 'f₁ (adimensional)'), use_container_width=True)
 
     # ── f₂ — CV de carga ────────────────────────────────────────────────────
@@ -826,7 +825,6 @@ with tab_ind:
             'P̄ op.', _comp['prom'] if _comp else None,
             _d2, _r2, _fr2, _fh2), use_container_width=True)
     _chart(serie_diaria(ind_f, 'f2_CV', 'f₂ (adimensional)'), use_container_width=True)
-    _chart(graficar_evidencia_f2(_comp), use_container_width=True)
     _chart(comparativo_bloques(ind_fechas, 'f2_CV', 'f₂ (adimensional)'), use_container_width=True)
 
     # ── f₃ — Mínimo–promedio ────────────────────────────────────────────────
@@ -842,7 +840,6 @@ with tab_ind:
             'P̄ op.', _comp['prom'] if _comp else None,
             _d3, _r3, _fr3, _fh3), use_container_width=True)
     _chart(serie_diaria(ind_f, 'f3', 'f₃ (adimensional)'), use_container_width=True)
-    _chart(graficar_evidencia_f3(_comp), use_container_width=True)
     _chart(comparativo_bloques(ind_fechas, 'f3', 'f₃ (adimensional)'), use_container_width=True)
 
     # ── f₄ — Carga no operacional ────────────────────────────────────────────
