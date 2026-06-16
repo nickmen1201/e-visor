@@ -41,13 +41,11 @@ AREAS_BLOQUE = {
     5:  10008.87,
     7:   4834.72,
     8:   3836.47,
-    9:   7579.50,
     10: 11469.06,
     12:  2848.88,
     15:  7780.01,
     17:  7611.12,
     18: 35916.80,
-    # Sub-bloques Salazar Ferro A (SFA) y Ecovilla — pendiente confirmar áreas exactas
     '9.1':      3789.75,   # SFA1 — mitad provisional de los 7 579,50 m² de B9
     '9.2':      3789.75,   # SFA2 — mitad provisional de los 7 579,50 m² de B9
     'Ecovilla': 0.0,       # área sin confirmar
