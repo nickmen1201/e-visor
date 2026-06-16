@@ -47,6 +47,24 @@ AREAS_BLOQUE = {
     15:  7780.01,
     17:  7611.12,
     18: 35916.80,
+    # Sub-bloques Salazar Ferro A (SFA) y Ecovilla — pendiente confirmar áreas exactas
+    '9.1':      3789.75,   # SFA1 — mitad provisional de los 7 579,50 m² de B9
+    '9.2':      3789.75,   # SFA2 — mitad provisional de los 7 579,50 m² de B9
+    'Ecovilla': 0.0,       # área sin confirmar
+}
+
+# Mapeo entity_id → etiqueta de display
+_ENTITY_TO_LABEL = {
+    'SmartMeter_SM_B9_SFA1':  'B9.1',
+    'SmartMeter_SM_B9_SFA2':  'B9.2',
+    'SmartMeter_SM_ECOVILLA': 'Ecovilla',
+}
+
+# Mapeo bloque (string) → entity_id canónico
+_BLOQUE_TO_ENTITY = {
+    '9.1':      'SmartMeter_SM_B9_SFA1',
+    '9.2':      'SmartMeter_SM_B9_SFA2',
+    'Ecovilla': 'SmartMeter_SM_ECOVILLA',
 }
 
 TARIFA_BASE_COP_KWH   = 859.19
@@ -113,13 +131,13 @@ def cargar_datos():
            .reset_index())
     ind.columns.name = None
     ind.rename(columns=_IND_MAP, inplace=True)
-    ind['bloque'] = ind['bloque'].astype(int)
+    ind['bloque'] = ind['bloque'].map(_parse_bloque)
 
     d12 = (ind_raw[ind_raw['indicador'] == 'IND-12']
            [['bloque', 'fecha', 'valor_num']]
            .dropna(subset=['bloque']).copy())
     d12['fecha']  = pd.to_datetime(d12['fecha'])
-    d12['bloque'] = d12['bloque'].astype(int)
+    d12['bloque'] = d12['bloque'].map(_parse_bloque)
     d12 = (d12.groupby(['bloque', 'fecha'])['valor_num']
               .mean().reset_index()
               .rename(columns={'valor_num': 'desbalance_pct'}))
@@ -129,10 +147,10 @@ def cargar_datos():
            [['bloque', 'mes', 'valor_num']]
            .dropna(subset=['bloque']).copy()
            .rename(columns={'valor_num': 'co2_mes'}))
-    d07['bloque'] = d07['bloque'].astype(int)
+    d07['bloque'] = d07['bloque'].map(_parse_bloque)
     co2_rows = []
     for _, row in d07.iterrows():
-        b, mes_str, co2 = int(row['bloque']), row['mes'], row['co2_mes']
+        b, mes_str, co2 = row['bloque'], row['mes'], row['co2_mes']
         if pd.isna(co2):
             continue
         start = pd.Timestamp(f'{mes_str}-01')
@@ -149,13 +167,13 @@ def cargar_datos():
     else:
         ind['CO2_tCO2e'] = np.nan
 
-    ind['entity_id']   = 'SmartMeter_SM_' + ind['bloque'].astype(str)
+    ind['entity_id']   = ind['bloque'].map(_entity_id_for)
     ind['fp_promedio'] = np.nan
     ind['fecha']       = pd.to_datetime(ind['fecha'])
 
     kpi_raw = xl.parse('KPIs')
     kpi_raw['valor_num']  = pd.to_numeric(kpi_raw['valor'], errors='coerce')
-    kpi_raw['bloque_int'] = pd.to_numeric(kpi_raw['bloque'], errors='coerce')
+    kpi_raw['bloque_int'] = kpi_raw['bloque'].map(_parse_bloque)
     kpi_raw['fecha'] = (pd.to_datetime(kpi_raw['mes'], format='%Y-%m', errors='coerce')
                         + pd.offsets.MonthEnd(0))
     _KPI_MAP = {
@@ -164,6 +182,7 @@ def cargar_datos():
         'KPI-09': 'KPI09_f4_pct', 'KPI-10': 'KPI10_desbalance_pct',
         'KPI-11': 'KPI11_fp',
     }
+    # Solo KPIs con bloque numérico o string conocido (excluye CAMPUS_TOTAL, Bloques 10-11)
     kpi_long = (kpi_raw[kpi_raw['kpi'].isin(_KPI_MAP)]
                 [['kpi', 'bloque_int', 'fecha', 'mes', 'valor_num']]
                 .dropna(subset=['bloque_int']).copy()
@@ -174,8 +193,7 @@ def cargar_datos():
            .reset_index())
     kpi.columns.name = None
     kpi.rename(columns=_KPI_MAP, inplace=True)
-    kpi['bloque']    = kpi['bloque'].astype(int)
-    kpi['entity_id'] = 'SmartMeter_SM_' + kpi['bloque'].astype(str)
+    kpi['entity_id'] = kpi['bloque'].map(_entity_id_for)
     kpi['area_m2']   = kpi['bloque'].map(AREAS_BLOQUE)
     kpi['e_wh']      = kpi['KPI01_kwh_m2'] * kpi['area_m2'] * 1000
 
@@ -183,7 +201,6 @@ def cargar_datos():
             [['bloque_int', 'fecha', 'fecha_pico', 'hora_pico']]
             .dropna(subset=['bloque_int'])
             .rename(columns={'bloque_int': 'bloque'}))
-    k03x['bloque'] = k03x['bloque'].astype(int)
     kpi = pd.merge(kpi, k03x, on=['bloque', 'fecha'], how='left')
 
     # ── DEMO KPIs (bloque puede ser texto: 'CAMPUS_TOTAL', 'Bloques 10-11') ──
@@ -222,7 +239,27 @@ ind, kpi, raw, kpi_demo, ind13 = cargar_datos()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _bloque_label(entity_id):
+    if entity_id in _ENTITY_TO_LABEL:
+        return _ENTITY_TO_LABEL[entity_id]
     return entity_id.replace('SmartMeter_SM_', 'B')
+
+
+def _parse_bloque(b):
+    """Convierte el valor de bloque del Excel a int si es entero, o str si es decimal/texto."""
+    if b is None or (isinstance(b, float) and b != b):  # NaN check
+        return b
+    s = str(b).strip()
+    try:
+        f = float(s)
+        return int(f) if f == int(f) else s  # "9" → 9, "9.1" → "9.1"
+    except ValueError:
+        return s  # "Ecovilla", "CAMPUS_TOTAL"
+
+
+def _entity_id_for(bloque):
+    """Construye el entity_id canónico a partir del valor de bloque."""
+    key = str(bloque)
+    return _BLOQUE_TO_ENTITY.get(key, f'SmartMeter_SM_{bloque}')
 
 
 def _delta_semana(ind_df, col):
@@ -328,7 +365,7 @@ def serie_diaria(ind_df, col, titulo_y, titulo='Evolución diaria', h=320):
 
 def comparativo_bloques(ind_df, col, titulo_x, titulo='Promedio por bloque (período)'):
     serie = (ind_df
-             .assign(bloque=ind_df['entity_id'].str.replace('SmartMeter_SM_', 'B', regex=False))
+             .assign(bloque=ind_df['entity_id'].map(_bloque_label))
              .groupby('bloque')[col].mean()
              .sort_values())
     if serie.empty:
@@ -636,7 +673,7 @@ if ind_f.empty:
 # CABECERA
 # ═══════════════════════════════════════════════════════════════════════════════
 bloque_txt = ("Todos los bloques" if seleccion == "Todos"
-              else f"Bloque {seleccion.replace('SmartMeter_SM_', '')}")
+              else f"Bloque {_bloque_label(seleccion)}")
 periodo_dias = max(1, (fin - inicio).days + 1)
 
 st.markdown(f"# ⚡ E-Visor — Dashboard energético")
@@ -740,7 +777,7 @@ with tab_ind:
     col_a, col_b = st.columns([1, 1])
     with col_a:
         fig_lf_bar = barras_horizontales(
-            ind_f.assign(bloque=ind_f['entity_id'].str.replace('SmartMeter_SM_', 'B', regex=False))
+            ind_f.assign(bloque=ind_f['entity_id'].map(_bloque_label))
                  .groupby('bloque')['LF'].mean().sort_values(),
             titulo='LF medio por bloque',
             xlabel='Factor de carga (0–1)',
@@ -757,7 +794,7 @@ with tab_ind:
     col_a, col_b = st.columns([1, 1])
     with col_a:
         fig_par_bar = barras_horizontales(
-            ind_f.assign(bloque=ind_f['entity_id'].str.replace('SmartMeter_SM_', 'B', regex=False))
+            ind_f.assign(bloque=ind_f['entity_id'].map(_bloque_label))
                  .groupby('bloque')['PAR'].mean().sort_values(),
             titulo='PAR medio por bloque',
             xlabel='PAR (>1 = picos pronunciados)',
@@ -935,7 +972,7 @@ with tab_ind:
 
         # CO₂ por bloque
         totales = (ind_f
-                   .assign(bloque=ind_f['entity_id'].str.replace('SmartMeter_SM_', 'B', regex=False))
+                   .assign(bloque=ind_f['entity_id'].map(_bloque_label))
                    .groupby('bloque')['CO2_tCO2e'].sum().sort_values())
         fig_co2_bloq = go.Figure(go.Bar(
             x=totales.values, y=totales.index.tolist(), orientation='h',
@@ -957,7 +994,7 @@ with tab_ind:
     st.markdown("## Desbalance de tensión")
     if 'desbalance_pct' in ind_f.columns and not ind_f['desbalance_pct'].dropna().empty:
         db_bloque = (ind_f
-                     .assign(bloque=ind_f['entity_id'].str.replace('SmartMeter_SM_', 'B', regex=False))
+                     .assign(bloque=ind_f['entity_id'].map(_bloque_label))
                      .groupby('bloque')['desbalance_pct'].mean().sort_values())
         col_a, col_b = st.columns([1, 1.5])
         with col_a:
