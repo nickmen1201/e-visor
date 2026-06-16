@@ -83,7 +83,15 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 
-*, *::before, *::after {
+body,
+p, h1, h2, h3, h4, h5, h6, li, td, th, label, input, textarea, select,
+[data-testid="stMarkdownContainer"] *,
+[data-testid="stMetricLabel"],  [data-testid="stMetricValue"],
+[data-testid="stWidgetLabel"],  [data-testid="stCaptionContainer"] *,
+[data-testid="stTextInput"] *, [data-testid="stSelectbox"] *,
+[data-testid="stDateInput"] *,
+div[class*="st-emotion"] p, div[class*="st-emotion"] span,
+button > div > p {
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
                  'Segoe UI', Helvetica, Arial, sans-serif !important;
 }
