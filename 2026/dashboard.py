@@ -41,20 +41,20 @@ AREAS_BLOQUE = {
     5:  10008.87,
     7:   4834.72,
     8:   3836.47,
+    9:   7579.50,   # B9 total (SFA1 + SFA2)
     10: 11469.06,
     12:  2848.88,
     15:  7780.01,
     17:  7611.12,
     18: 35916.80,
-    '9.1':      3789.75,   # SFA1 — mitad provisional de los 7 579,50 m² de B9
-    '9.2':      3789.75,   # SFA2 — mitad provisional de los 7 579,50 m² de B9
+    '9.1':      3789.75,   # SFA1 — usado solo en carga intermedia
+    '9.2':      3789.75,   # SFA2 — usado solo en carga intermedia
     'Ecovilla': 0.0,       # área sin confirmar
 }
 
 # Mapeo entity_id → etiqueta de display
 _ENTITY_TO_LABEL = {
-    'SmartMeter_SM_B9_SFA1':  'B9.1',
-    'SmartMeter_SM_B9_SFA2':  'B9.2',
+    'SmartMeter_SM_B9':       'B9',
     'SmartMeter_SM_ECOVILLA': 'Ecovilla',
 }
 
@@ -324,6 +324,40 @@ def cargar_datos():
         raw['fecha'] = pd.to_datetime(raw['time_index_colombia'].dt.date)
     except FileNotFoundError:
         raw = None
+
+    # ── Combinar B9.1 (SFA1) + B9.2 (SFA2) → B9 ─────────────────────────────
+    _b9_ind = ind['bloque'].isin(['9.1', '9.2'])
+    if _b9_ind.any():
+        _num = [c for c in ind.columns if c not in ('bloque', 'fecha', 'entity_id', 'fp_promedio')]
+        _agg = {c: ('sum' if c == 'CO2_tCO2e' else 'mean') for c in _num}
+        _b9 = ind[_b9_ind].groupby('fecha', as_index=False).agg(_agg)
+        _b9['bloque']      = 9
+        _b9['entity_id']   = 'SmartMeter_SM_B9'
+        _b9['fp_promedio'] = np.nan
+        ind = pd.concat([ind[~_b9_ind], _b9], ignore_index=True)
+
+    _b9_kpi = kpi['bloque'].isin(['9.1', '9.2'])
+    if _b9_kpi.any():
+        _kn = [c for c in kpi.columns
+               if c not in ('bloque', 'fecha', 'mes', 'entity_id', 'area_m2', 'fecha_pico', 'hora_pico')]
+        _kagg = {c: ('sum' if c in ('e_wh', 'KPI05_CO2_tCO2e', 'KPI03_pico_kw') else 'mean')
+                 for c in _kn}
+        _b9k = kpi[_b9_kpi].groupby(['fecha', 'mes'], as_index=False).agg(_kagg)
+        _b9k['bloque']    = 9
+        _b9k['entity_id'] = 'SmartMeter_SM_B9'
+        _b9k['area_m2']   = AREAS_BLOQUE[9]
+        if 'e_wh' in _b9k.columns:
+            _b9k['KPI01_kwh_m2'] = _b9k['e_wh'] / (_b9k['area_m2'] * 1000)
+        kpi = pd.concat([kpi[~_b9_kpi], _b9k], ignore_index=True)
+
+    if raw is not None:
+        _b9_raw = raw['entity_id'].isin(['SmartMeter_SM_B9_SFA1', 'SmartMeter_SM_B9_SFA2'])
+        if _b9_raw.any():
+            _rw = (raw[_b9_raw]
+                   .groupby('time_index_colombia', as_index=False)
+                   .agg({'activepower': 'sum', 'hora': 'first', 'fecha': 'first'}))
+            _rw['entity_id'] = 'SmartMeter_SM_B9'
+            raw = pd.concat([raw[~_b9_raw], _rw], ignore_index=True)
 
     return ind, kpi, raw, kpi_demo, ind13
 
