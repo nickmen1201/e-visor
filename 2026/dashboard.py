@@ -16,12 +16,12 @@ st.set_page_config(page_title="E-Visor · Ecocampus UPB", layout="wide",
                    initial_sidebar_state="expanded")
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
-C_TEAL   = '#1A5C38'   # verde oscuro institucional
-C_AMBER  = '#B45309'   # ámbar oscuro / advertencia
-C_RED    = '#8B1A1A'   # rojo profundo / alerta
-C_GRAY   = '#7B8899'   # gris azulado neutro
-C_BLUE   = '#1E3F6E'   # azul marino (comparativos)
-C_PURPLE = '#3D3480'   # índigo profundo
+C_TEAL   = '#1A5C38'   # verde oscuro institucional (positivo / objetivo)
+C_AMBER  = '#C07B00'   # ámbar dorado (advertencia — máxima distancia del verde y rojo)
+C_RED    = '#B01C1C'   # rojo oscuro (alerta)
+C_GRAY   = '#9AABB8'   # gris azulado claro (referencia / MA7)
+C_BLUE   = '#1F5CA8'   # azul medio (barras comparativas)
+C_PURPLE = '#7B3EA7'   # violeta claro (líneas secundarias — distinto del azul)
 C_BG     = '#F8F9FA'   # fondo principal
 
 BASE = Path(__file__).parent
@@ -80,9 +80,9 @@ _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
 *, *::before, *::after {
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
                  'Segoe UI', Helvetica, Arial, sans-serif !important;
@@ -148,8 +148,8 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
 }
 
 .status-verde { color: #1A5C38; font-weight: 600; }
-.status-ambar { color: #B45309; font-weight: 600; }
-.status-rojo  { color: #8B1A1A; font-weight: 600; }
+.status-ambar { color: #C07B00; font-weight: 600; }
+.status-rojo  { color: #B01C1C; font-weight: 600; }
 
 button[data-baseweb="tab"] p {
     font-size: 0.72rem !important;
