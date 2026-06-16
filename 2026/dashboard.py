@@ -827,8 +827,8 @@ fp_medio         = float(kpi_f['KPI11_fp'].mean()) if 'KPI11_fp' in kpi_f.column
 db_medio         = float(ind_f['desbalance_pct'].mean()) if 'desbalance_pct' in ind_f.columns and not ind_f['desbalance_pct'].dropna().empty else None
 pico_max         = float(kpi_f['KPI03_pico_kw'].max()) if 'KPI03_pico_kw' in kpi_f.columns and not kpi_f['KPI03_pico_kw'].dropna().empty else None
 
-cols_res = st.columns(6)
-with cols_res[0]:
+_res_f1, _res_f2, _res_f3 = st.columns(3)
+with _res_f1:
     if total_kwh_campus:
         costo = total_kwh_campus * TARIFA_BASE_COP_KWH
         st.metric("Energía consumida", f"{total_kwh_campus:,.0f} kWh",
@@ -836,39 +836,40 @@ with cols_res[0]:
     else:
         st.metric("Energía consumida", "—")
 
-with cols_res[1]:
+with _res_f2:
     if co2_total is not None:
-        st.metric("Emisiones CO₂", f"{co2_total:.3f} tCO₂e",
+        st.metric("Emisiones CO₂", f"{co2_total:.2f} tCO₂e",
                   help=f"≈ {int(co2_total * ARBOLES_POR_TON_CO2):,} árboles jóvenes")
     else:
         st.metric("Emisiones CO₂", "—")
 
-with cols_res[2]:
+with _res_f3:
     if lf_medio is not None:
         color_lf = "normal" if lf_medio >= 0.65 else "inverse"
-        st.metric("Load Factor medio", f"{lf_medio:.3f}",
+        st.metric("Load Factor medio", f"{lf_medio:.2f}",
                   delta="≥ 0.65 objetivo" if lf_medio >= 0.65 else "< 0.65 alerta",
                   delta_color=color_lf)
     else:
-        st.metric("Load Factor", "—")
+        st.metric("Load Factor medio", "—")
 
-with cols_res[3]:
+_res_s1, _res_s2, _res_s3 = st.columns(3)
+with _res_s1:
     if pico_max is not None:
-        st.metric("Pico de demanda", f"{pico_max:.1f} kW",
+        st.metric("Pico de demanda", f"{pico_max:.2f} kW",
                   help="Máximo registrado en el período")
     else:
         st.metric("Pico de demanda", "—")
 
-with cols_res[4]:
+with _res_s2:
     if fp_medio is not None:
         delta_fp = "Cumple objetivo" if fp_medio >= UMBRAL_FP_OBJ else ("Revisar" if fp_medio >= UMBRAL_FP_ALERT else "Alerta")
-        st.metric("Factor de potencia", f"{fp_medio:.3f}",
+        st.metric("Factor de potencia", f"{fp_medio:.2f}",
                   delta=delta_fp,
                   delta_color="normal" if fp_medio >= UMBRAL_FP_OBJ else "inverse")
     else:
         st.metric("Factor de potencia", "—")
 
-with cols_res[5]:
+with _res_s3:
     if db_medio is not None:
         delta_db = "Normal" if db_medio < UMBRAL_DB_OBJ else ("Revisar" if db_medio < UMBRAL_DB_ALERT else "Alerta")
         st.metric("Desbalance de tensión", f"{db_medio:.2f}%",
@@ -1092,40 +1093,37 @@ with tab_ind:
         db_bloque = (ind_f
                      .assign(bloque=ind_f['entity_id'].map(_bloque_label))
                      .groupby('bloque')['desbalance_pct'].mean().sort_values())
-        col_a, col_b = st.columns([1, 1.5])
-        with col_a:
-            fig_db_bar = barras_horizontales(
-                db_bloque, titulo='Desbalance medio por bloque', xlabel='%',
-                color_fn=lambda v: _semaforo(v, UMBRAL_DB_OBJ, UMBRAL_DB_ALERT, mayor_es_mejor=False),
-                ref_lines=[
-                    (UMBRAL_DB_OBJ,   C_TEAL, f'{UMBRAL_DB_OBJ:.0f}% objetivo'),
-                    (UMBRAL_DB_ALERT, C_RED,  f'{UMBRAL_DB_ALERT:.0f}% alerta'),
-                ],
-            )
-            _chart(fig_db_bar, use_container_width=True)
-        with col_b:
-            serie_db = ind_f.groupby('fecha')['desbalance_pct'].mean().sort_index()
-            colores_db = [_semaforo(v, UMBRAL_DB_OBJ, UMBRAL_DB_ALERT, mayor_es_mejor=False)
-                          for v in serie_db.values]
-            fig_db_ev = go.Figure()
-            fig_db_ev.add_hrect(y0=UMBRAL_DB_ALERT, y1=serie_db.max() * 1.2 or 4,
-                                fillcolor=C_RED, opacity=0.05, line_width=0)
-            fig_db_ev.add_hrect(y0=UMBRAL_DB_OBJ, y1=UMBRAL_DB_ALERT,
-                                fillcolor=C_AMBER, opacity=0.07, line_width=0)
-            fig_db_ev.add_trace(go.Bar(
-                x=serie_db.index, y=serie_db.values, marker_color=colores_db,
-                hovertemplate='%{x|%d %b}: %{y:.2f}%<extra></extra>',
-            ))
-            fig_db_ev.add_hline(y=UMBRAL_DB_OBJ,   line_color=C_TEAL, line_dash='dot',
-                                annotation_text=f'objetivo {UMBRAL_DB_OBJ:.0f}%',
-                                annotation_position='top right')
-            fig_db_ev.add_hline(y=UMBRAL_DB_ALERT, line_color=C_RED, line_dash='dash',
-                                annotation_text=f'alerta {UMBRAL_DB_ALERT:.0f}%',
-                                annotation_position='top right')
-            fig_db_ev.update_layout(title=dict(text='Evolución diaria — desbalance de tensión',
-                                               font=dict(size=13), x=0),
-                                    showlegend=False, xaxis_title='Fecha', yaxis_title='%')
-            _chart(_layout_base(fig_db_ev), use_container_width=True)
+        fig_db_bar = barras_horizontales(
+            db_bloque, titulo='Desbalance medio por bloque', xlabel='%',
+            color_fn=lambda v: _semaforo(v, UMBRAL_DB_OBJ, UMBRAL_DB_ALERT, mayor_es_mejor=False),
+            ref_lines=[
+                (UMBRAL_DB_OBJ,   C_TEAL, f'{UMBRAL_DB_OBJ:.0f}% objetivo'),
+                (UMBRAL_DB_ALERT, C_RED,  f'{UMBRAL_DB_ALERT:.0f}% alerta'),
+            ],
+        )
+        _chart(fig_db_bar, use_container_width=True)
+        serie_db = ind_f.groupby('fecha')['desbalance_pct'].mean().sort_index()
+        colores_db = [_semaforo(v, UMBRAL_DB_OBJ, UMBRAL_DB_ALERT, mayor_es_mejor=False)
+                      for v in serie_db.values]
+        fig_db_ev = go.Figure()
+        fig_db_ev.add_hrect(y0=UMBRAL_DB_ALERT, y1=serie_db.max() * 1.2 or 4,
+                            fillcolor=C_RED, opacity=0.05, line_width=0)
+        fig_db_ev.add_hrect(y0=UMBRAL_DB_OBJ, y1=UMBRAL_DB_ALERT,
+                            fillcolor=C_AMBER, opacity=0.07, line_width=0)
+        fig_db_ev.add_trace(go.Bar(
+            x=serie_db.index, y=serie_db.values, marker_color=colores_db,
+            hovertemplate='%{x|%d %b}: %{y:.2f}%<extra></extra>',
+        ))
+        fig_db_ev.add_hline(y=UMBRAL_DB_OBJ,   line_color=C_TEAL, line_dash='dot',
+                            annotation_text=f'objetivo {UMBRAL_DB_OBJ:.0f}%',
+                            annotation_position='top right')
+        fig_db_ev.add_hline(y=UMBRAL_DB_ALERT, line_color=C_RED, line_dash='dash',
+                            annotation_text=f'alerta {UMBRAL_DB_ALERT:.0f}%',
+                            annotation_position='top right')
+        fig_db_ev.update_layout(title=dict(text='Evolución diaria — desbalance de tensión',
+                                           font=dict(size=13), x=0),
+                                showlegend=False, xaxis_title='Fecha', yaxis_title='%')
+        _chart(_layout_base(fig_db_ev), use_container_width=True)
 
     # ── IND-13 — Factor de Diversidad del campus ────────────────────────────
     st.markdown("## FD — Factor de Diversidad del campus")
@@ -1168,18 +1166,16 @@ with tab_ind:
         ('IND-11', 'Ahorro', 'Ahorro energético verificado',
          'Pendiente: se requiere línea base de ≥ 12 meses de operación histórica.'),
     ]
-    p_cols = st.columns(2)
-    for i, (ind_id, sigla, nombre, pendiente) in enumerate(_PEND_INFO):
-        with p_cols[i % 2]:
-            st.markdown(
-                f'<div style="background:#FDFAF5;border-left:3px solid {C_AMBER};'
-                f'border-radius:2px;padding:14px 18px;margin-bottom:16px">'
-                f'<b style="color:#0D1B2A;font-family:IBM Plex Sans,sans-serif">{ind_id} · {sigla} — {nombre}</b><br>'
-                f'<span style="color:#64748B;font-size:.85rem;font-family:IBM Plex Sans,sans-serif">{pendiente}</span><br>'
-                f'<span style="color:{C_AMBER};font-weight:600;font-size:.80rem;font-family:IBM Plex Sans,sans-serif">Sin datos — pendiente de integración</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+    for ind_id, sigla, nombre, pendiente in _PEND_INFO:
+        st.markdown(
+            f'<div style="background:#FDFAF5;border-left:3px solid {C_AMBER};'
+            f'border-radius:2px;padding:14px 18px;margin-bottom:16px">'
+            f'<b style="color:#0D1B2A;font-family:IBM Plex Sans,sans-serif">{ind_id} · {sigla} — {nombre}</b><br>'
+            f'<span style="color:#64748B;font-size:.85rem;font-family:IBM Plex Sans,sans-serif">{pendiente}</span><br>'
+            f'<span style="color:{C_AMBER};font-weight:600;font-size:.80rem;font-family:IBM Plex Sans,sans-serif">Sin datos — pendiente de integración</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -1208,40 +1204,36 @@ with tab_kpi:
         umbral_objetivo_k1 = mu_k1 * 0.93
 
         serie_k1 = pd.Series(vals_k1, index=[f'B{b}' for b in total_periodo.index])
-        col_a, col_b = st.columns([1, 1.5])
-        with col_a:
-            fig_k1 = barras_horizontales(
-                serie_k1, titulo='KPI 01 — Intensidad energética por bloque',
-                xlabel=f'kWh/m² · {periodo_dias} días',
-                color_fn=lambda v: _semaforo(v, umbral_objetivo_k1, umbral_alerta_k1, mayor_es_mejor=False),
-                ref_lines=[
-                    (umbral_objetivo_k1, C_TEAL, f'objetivo {umbral_objetivo_k1:.2f}'),
-                    (umbral_alerta_k1,   C_RED,  f'alerta {umbral_alerta_k1:.2f}'),
-                ],
-            )
-            _chart(fig_k1, use_container_width=True)
-
-        with col_b:
-            total_kwh_campus = kpi01_f['e_wh'].sum() / 1_000
-            costo_cop      = total_kwh_campus * TARIFA_BASE_COP_KWH
-            hogares_meses  = total_kwh_campus / HOGAR_KWH_MES
-            cm1, cm2, cm3 = st.columns(3)
-            cm1.metric("Energía consumida", f"{total_kwh_campus:,.0f} kWh")
-            cm2.metric("Costo estimado", f"${costo_cop:,.0f} COP",
-                       help="Tarifa EPM NT1 ene-2026: $859.19 COP/kWh")
-            cm3.metric("Hogares equivalentes", f"{hogares_meses:,.0f} mes-hogar",
-                       help=f"Referencia: {HOGAR_KWH_MES} kWh/mes estrato 1–2")
-            st.info(
-                f"En {periodo_dias} días el campus consumió **{total_kwh_campus:,.0f} kWh** "
-                f"≡ {hogares_meses:,.0f} hogares un mes. "
-                f"Costo de referencia: **${costo_cop:,.0f} COP** "
-                f"(EPM NT1 ene-2026 · $859 COP/kWh)."
-            )
-            st.caption(
-                f"Umbrales dinámicos: objetivo = μ×0.93 = {umbral_objetivo_k1:.2f} kWh/m² · "
-                f"alerta = μ+1σ = {umbral_alerta_k1:.2f} kWh/m². "
-                f"Áreas: AREAS_2026.xlsx, Planeación Física UPB."
-            )
+        fig_k1 = barras_horizontales(
+            serie_k1, titulo='KPI 01 — Intensidad energética por bloque',
+            xlabel=f'kWh/m² · {periodo_dias} días',
+            color_fn=lambda v: _semaforo(v, umbral_objetivo_k1, umbral_alerta_k1, mayor_es_mejor=False),
+            ref_lines=[
+                (umbral_objetivo_k1, C_TEAL, f'objetivo {umbral_objetivo_k1:.2f}'),
+                (umbral_alerta_k1,   C_RED,  f'alerta {umbral_alerta_k1:.2f}'),
+            ],
+        )
+        _chart(fig_k1, use_container_width=True)
+        total_kwh_campus = kpi01_f['e_wh'].sum() / 1_000
+        costo_cop      = total_kwh_campus * TARIFA_BASE_COP_KWH
+        hogares_meses  = total_kwh_campus / HOGAR_KWH_MES
+        cm1, cm2, cm3 = st.columns(3)
+        cm1.metric("Energía consumida", f"{total_kwh_campus:,.0f} kWh")
+        cm2.metric("Costo estimado", f"${costo_cop:,.0f} COP",
+                   help="Tarifa EPM NT1 ene-2026: $859.19 COP/kWh")
+        cm3.metric("Hogares equivalentes", f"{hogares_meses:,.0f} mes-hogar",
+                   help=f"Referencia: {HOGAR_KWH_MES} kWh/mes estrato 1–2")
+        st.info(
+            f"En {periodo_dias} días el campus consumió **{total_kwh_campus:,.0f} kWh** "
+            f"≡ {hogares_meses:,.0f} hogares un mes. "
+            f"Costo de referencia: **${costo_cop:,.0f} COP** "
+            f"(EPM NT1 ene-2026 · $859 COP/kWh)."
+        )
+        st.caption(
+            f"Umbrales dinámicos: objetivo = μ×0.93 = {umbral_objetivo_k1:.2f} kWh/m² · "
+            f"alerta = μ+1σ = {umbral_alerta_k1:.2f} kWh/m². "
+            f"Áreas: AREAS_2026.xlsx, Planeación Física UPB."
+        )
     else:
         st.info("KPI 01 no disponible para el período seleccionado.")
 
@@ -1333,22 +1325,19 @@ with tab_kpi:
     lf_medio_k8 = kpi_f.groupby('entity_id')['KPI08_LF'].mean().sort_values()
     lf_medio_k8.index = [_bloque_label(e) for e in lf_medio_k8.index]
 
-    col_a, col_b = st.columns([1, 1.5])
-    with col_a:
-        _chart(barras_horizontales(
-            lf_medio_k8, titulo='KPI 08 — LF medio por bloque', xlabel='LF',
-            color_fn=lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
-            ref_lines=[
-                (umbral_objetivo_lf, C_TEAL, f'objetivo {umbral_objetivo_lf:.3f}'),
-                (umbral_alerta_lf,   C_RED,  f'alerta {umbral_alerta_lf:.3f}'),
-            ],
-        ), use_container_width=True)
-    with col_b:
-        _chart(tira_estado(
-            kpi_f, 'KPI08_LF', 'KPI 08 — Load Factor',
-            lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
-            f'verde ≥ {umbral_objetivo_lf:.3f}\nnaranja ≥ {umbral_alerta_lf:.3f}\nrojo < {umbral_alerta_lf:.3f}',
-        ), use_container_width=True)
+    _chart(barras_horizontales(
+        lf_medio_k8, titulo='KPI 08 — LF medio por bloque', xlabel='LF',
+        color_fn=lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
+        ref_lines=[
+            (umbral_objetivo_lf, C_TEAL, f'objetivo {umbral_objetivo_lf:.3f}'),
+            (umbral_alerta_lf,   C_RED,  f'alerta {umbral_alerta_lf:.3f}'),
+        ],
+    ), use_container_width=True)
+    _chart(tira_estado(
+        kpi_f, 'KPI08_LF', 'KPI 08 — Load Factor',
+        lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
+        f'verde ≥ {umbral_objetivo_lf:.3f}\nnaranja ≥ {umbral_alerta_lf:.3f}\nrojo < {umbral_alerta_lf:.3f}',
+    ), use_container_width=True)
 
     # ── KPI 09 — Consumo no operacional ──────────────────────────────────────
     st.markdown("## KPI 09 — Índice de consumo no operacional")
@@ -1359,43 +1348,40 @@ with tab_kpi:
     umbral_objetivo_k9 = mu_k9 * 0.93
     f4_bloque_k9.index = [_bloque_label(e) for e in f4_bloque_k9.index]
 
-    col_a, col_b = st.columns([1, 1.5])
-    with col_a:
-        _chart(barras_horizontales(
-            f4_bloque_k9, titulo='KPI 09 — Consumo no operacional por bloque',
-            xlabel='% (22:00–06:00)',
-            color_fn=lambda v: _semaforo(v, umbral_objetivo_k9, umbral_alerta_k9, mayor_es_mejor=False),
-            ref_lines=[
-                (umbral_objetivo_k9, C_TEAL, f'objetivo {umbral_objetivo_k9:.1f}%'),
-                (umbral_alerta_k9,   C_RED,  f'alerta {umbral_alerta_k9:.1f}%'),
-            ],
-        ), use_container_width=True)
-    with col_b:
-        if total_kwh_campus is not None and total_kwh_campus > 0:
-            pct_noche  = float(f4_bloque_k9.mean()) / 100
-            e_noche    = total_kwh_campus * pct_noche
-            costo_noch = e_noche * TARIFA_BASE_COP_KWH
-            pct_exceso = max(0.0, pct_noche - umbral_objetivo_k9 / 100)
-            ahorro_kwh = total_kwh_campus * pct_exceso
-            ahorro_cop = ahorro_kwh * TARIFA_BASE_COP_KWH
+    _chart(barras_horizontales(
+        f4_bloque_k9, titulo='KPI 09 — Consumo no operacional por bloque',
+        xlabel='% (22:00–06:00)',
+        color_fn=lambda v: _semaforo(v, umbral_objetivo_k9, umbral_alerta_k9, mayor_es_mejor=False),
+        ref_lines=[
+            (umbral_objetivo_k9, C_TEAL, f'objetivo {umbral_objetivo_k9:.1f}%'),
+            (umbral_alerta_k9,   C_RED,  f'alerta {umbral_alerta_k9:.1f}%'),
+        ],
+    ), use_container_width=True)
+    if total_kwh_campus is not None and total_kwh_campus > 0:
+        pct_noche  = float(f4_bloque_k9.mean()) / 100
+        e_noche    = total_kwh_campus * pct_noche
+        costo_noch = e_noche * TARIFA_BASE_COP_KWH
+        pct_exceso = max(0.0, pct_noche - umbral_objetivo_k9 / 100)
+        ahorro_kwh = total_kwh_campus * pct_exceso
+        ahorro_cop = ahorro_kwh * TARIFA_BASE_COP_KWH
 
-            cn1, cn2, cn3 = st.columns(3)
-            cn1.metric("Energía nocturna", f"{e_noche:,.0f} kWh")
-            cn2.metric("Costo nocturno", f"${costo_noch:,.0f} COP")
-            if ahorro_cop > 0:
-                cn3.metric("Ahorro potencial", f"${ahorro_cop:,.0f} COP",
-                           delta=f"−{ahorro_kwh:,.0f} kWh", delta_color="inverse")
-                st.warning(
-                    f"**{pct_noche*100:.1f}%** del consumo ocurre entre 22:00 y 06:00 "
-                    f"({e_noche:,.0f} kWh · ${costo_noch:,.0f} COP). "
-                    f"Reducir al objetivo ({umbral_objetivo_k9:.1f}%) ahorraría **${ahorro_cop:,.0f} COP**."
-                )
-            else:
-                cn3.metric("Objetivo cumplido", "—")
-                st.success(
-                    f"Consumo nocturno: **{pct_noche*100:.1f}%** — por debajo del objetivo "
-                    f"({umbral_objetivo_k9:.1f}%). Costo nocturno: **${costo_noch:,.0f} COP**."
-                )
+        cn1, cn2, cn3 = st.columns(3)
+        cn1.metric("Energía nocturna", f"{e_noche:,.0f} kWh")
+        cn2.metric("Costo nocturno", f"${costo_noch:,.0f} COP")
+        if ahorro_cop > 0:
+            cn3.metric("Ahorro potencial", f"${ahorro_cop:,.0f} COP",
+                       delta=f"−{ahorro_kwh:,.0f} kWh", delta_color="inverse")
+            st.warning(
+                f"**{pct_noche*100:.1f}%** del consumo ocurre entre 22:00 y 06:00 "
+                f"({e_noche:,.0f} kWh · ${costo_noch:,.0f} COP). "
+                f"Reducir al objetivo ({umbral_objetivo_k9:.1f}%) ahorraría **${ahorro_cop:,.0f} COP**."
+            )
+        else:
+            cn3.metric("Objetivo cumplido", "—")
+            st.success(
+                f"Consumo nocturno: **{pct_noche*100:.1f}%** — por debajo del objetivo "
+                f"({umbral_objetivo_k9:.1f}%). Costo nocturno: **${costo_noch:,.0f} COP**."
+            )
 
     _chart(tira_estado(
         kpi_f, 'KPI09_f4_pct', 'KPI 09 — Consumo no operacional',
@@ -1488,20 +1474,17 @@ with tab_kpi:
         META_K04   = 3.0
         val_k04    = float(k04['valor_num'].dropna().iloc[0])
         color_k04  = C_TEAL if val_k04 >= META_K04 else C_AMBER
-        col_k4a, col_k4b = st.columns([1, 2])
-        with col_k4a:
-            st.metric("Ahorro de referencia (DEMO)", f"{val_k04:.2f}%",
-                      delta=f"meta ≥ {META_K04:.0f}%",
-                      delta_color="normal" if val_k04 >= META_K04 else "inverse")
-        with col_k4b:
-            st.markdown(
-                f'<div style="background:#FFF8EC;border-left:4px solid {color_k04};'
-                f'border-radius:8px;padding:12px 16px">'
-                f'El valor <b>{val_k04:.2f}%</b> es un estimado de referencia calculado con la energía '
-                f'disponible hasta la fecha (< 12 meses de historial). '
-                f'La meta es <b>≥ {META_K04:.0f}% de reducción anual</b> respecto al año anterior.</div>',
-                unsafe_allow_html=True,
-            )
+        st.metric("Ahorro de referencia (DEMO)", f"{val_k04:.2f}%",
+                  delta=f"meta ≥ {META_K04:.0f}%",
+                  delta_color="normal" if val_k04 >= META_K04 else "inverse")
+        st.markdown(
+            f'<div style="background:#FFF8EC;border-left:4px solid {color_k04};'
+            f'border-radius:8px;padding:12px 16px">'
+            f'El valor <b>{val_k04:.2f}%</b> es un estimado de referencia calculado con la energía '
+            f'disponible hasta la fecha (< 12 meses de historial). '
+            f'La meta es <b>≥ {META_K04:.0f}% de reducción anual</b> respecto al año anterior.</div>',
+            unsafe_allow_html=True,
+        )
         estado_k04 = k04['estado'].dropna().iloc[0] if not k04['estado'].dropna().empty else 'DEMO'
         st.caption(f"Estado: {estado_k04} · El valor es constante por bloque (referencia campus).")
     else:
