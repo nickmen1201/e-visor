@@ -243,7 +243,7 @@ def cargar_datos():
                       + pd.offsets.MonthEnd(0))
 
     try:
-        raw = pd.read_csv(BASE / 'etsmartmeter_clean.csv',
+        raw = pd.read_csv(BASE / 'clean_etsmartmeter.csv',
                           parse_dates=['time_index_colombia'])
         raw['hora']  = raw['time_index_colombia'].dt.hour
         raw['fecha'] = pd.to_datetime(raw['time_index_colombia'].dt.date)
@@ -875,7 +875,7 @@ with tab_ind:
     else:
         f4_diario = (ind_f.groupby('fecha')['f4'].mean()
                      .to_frame('f4').assign(p_op=np.nan, p_no_op=np.nan))
-        st.caption("P̄ desagregada no disponible — etsmartmeter_clean.csv no encontrado.")
+        st.caption("P̄ desagregada no disponible — clean_etsmartmeter.csv no encontrado.")
 
     if not f4_diario.empty:
         hoy_f4       = f4_diario.iloc[-1]
