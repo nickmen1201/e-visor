@@ -106,6 +106,17 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
 """, unsafe_allow_html=True)
 
 
+def _parse_bloque(b):
+    if b is None or (isinstance(b, float) and b != b):
+        return b
+    s = str(b).strip()
+    try:
+        f = float(s)
+        return int(f) if f == int(f) else s  # "9" → 9, "9.1" → "9.1"
+    except ValueError:
+        return s  # "Ecovilla", "CAMPUS_TOTAL"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CARGA DE DATOS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -242,18 +253,6 @@ def _bloque_label(entity_id):
     if entity_id in _ENTITY_TO_LABEL:
         return _ENTITY_TO_LABEL[entity_id]
     return entity_id.replace('SmartMeter_SM_', 'B')
-
-
-def _parse_bloque(b):
-    """Convierte el valor de bloque del Excel a int si es entero, o str si es decimal/texto."""
-    if b is None or (isinstance(b, float) and b != b):  # NaN check
-        return b
-    s = str(b).strip()
-    try:
-        f = float(s)
-        return int(f) if f == int(f) else s  # "9" → 9, "9.1" → "9.1"
-    except ValueError:
-        return s  # "Ecovilla", "CAMPUS_TOTAL"
 
 
 def _entity_id_for(bloque):
