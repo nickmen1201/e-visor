@@ -83,15 +83,21 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 
-body,
-p, h1, h2, h3, h4, h5, h6, li, td, th, label, input, textarea, select,
-[data-testid="stMarkdownContainer"] *,
-[data-testid="stMetricLabel"],  [data-testid="stMetricValue"],
-[data-testid="stWidgetLabel"],  [data-testid="stCaptionContainer"] *,
-[data-testid="stTextInput"] *, [data-testid="stSelectbox"] *,
-[data-testid="stDateInput"] *,
-div[class*="st-emotion"] p, div[class*="st-emotion"] span,
-button > div > p {
+body {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
+                 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+h1, h2, h3, h4, h5, h6,
+p, li, td, th,
+label, input, textarea, select,
+[data-testid="stMetricLabel"],
+[data-testid="stMetricValue"],
+[data-testid="stWidgetLabel"],
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stCaptionContainer"] p {
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
                  'Segoe UI', Helvetica, Arial, sans-serif !important;
 }
