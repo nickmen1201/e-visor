@@ -65,6 +65,18 @@ _BLOQUE_TO_ENTITY = {
     'Ecovilla': 'SmartMeter_SM_ECOVILLA',
 }
 
+# Mapeo entity_id CSV → bloque para el cálculo de CO₂ (incluye sub-medidores)
+_CO2_ENTITY_BLOQUE = {
+    'SmartMeter_SM_B3_RECT':  3,   'SmartMeter_SM_B4_PRIM':  4,
+    'SmartMeter_SM_B5_BACH':  5,   'SmartMeter_SM_B7_CTIC':  7,
+    'SmartMeter_SM_B7_TAC':   7,   'SmartMeter_SM_B8_AA':    8,
+    'SmartMeter_SM_B8_CPA':   8,   'SmartMeter_SM_B8_LABS':  8,
+    'SmartMeter_SM_B10_ARQ': 10,   'SmartMeter_SM_B12_DERE': 12,
+    'SmartMeter_SM_B15_BIBL': 15,  'SmartMeter_SM_B17_POLI': 17,
+    'SmartMeter_SM_B18_PARQ': 18,  'SmartMeter_SM_B9_SFA1': '9.1',
+    'SmartMeter_SM_B9_SFA2': '9.2','SmartMeter_SM_ECOVILLA': 'Ecovilla',
+}
+
 TARIFA_BASE_COP_KWH   = 859.19
 TARIFA_INDCOM_COP_KWH = 1_031.03
 HOGAR_KWH_MES         = 130
@@ -240,29 +252,7 @@ def cargar_datos():
               .rename(columns={'valor_num': 'desbalance_pct'}))
     ind = pd.merge(ind, d12, on=['bloque', 'fecha'], how='outer')
 
-    d07 = (ind_raw[ind_raw['indicador'] == 'IND-07']
-           [['bloque', 'mes', 'valor_num']]
-           .dropna(subset=['bloque']).copy()
-           .rename(columns={'valor_num': 'co2_mes'}))
-    d07['bloque'] = d07['bloque'].map(_parse_bloque)
-    co2_rows = []
-    for _, row in d07.iterrows():
-        b, mes_str, co2 = row['bloque'], row['mes'], row['co2_mes']
-        if pd.isna(co2):
-            continue
-        start = pd.Timestamp(f'{mes_str}-01')
-        end   = start + pd.offsets.MonthEnd(0)
-        mask  = (ind['bloque'] == b) & (ind['fecha'] >= start) & (ind['fecha'] <= end)
-        dates = ind[mask]['fecha'].unique()
-        if len(dates) == 0:
-            continue
-        cpd = co2 / len(dates)
-        for d in dates:
-            co2_rows.append({'bloque': b, 'fecha': d, 'CO2_tCO2e': cpd})
-    if co2_rows:
-        ind = pd.merge(ind, pd.DataFrame(co2_rows), on=['bloque', 'fecha'], how='left')
-    else:
-        ind['CO2_tCO2e'] = np.nan
+    ind['CO2_tCO2e'] = np.nan  # se recalcula desde activeenergyimport del CSV
 
     ind['entity_id']   = ind['bloque'].map(_entity_id_for)
     ind['fp_promedio'] = np.nan
@@ -275,9 +265,8 @@ def cargar_datos():
                         + pd.offsets.MonthEnd(0))
     _KPI_MAP = {
         'KPI-01': 'KPI01_kwh_m2', 'KPI-03': 'KPI03_pico_kw',
-        'KPI-05': 'KPI05_CO2_tCO2e', 'KPI-08': 'KPI08_LF',
-        'KPI-09': 'KPI09_f4_pct', 'KPI-10': 'KPI10_desbalance_pct',
-        'KPI-11': 'KPI11_fp',
+        'KPI-08': 'KPI08_LF',     'KPI-09': 'KPI09_f4_pct',
+        'KPI-10': 'KPI10_desbalance_pct', 'KPI-11': 'KPI11_fp',
     }
     # Solo KPIs con bloque numérico o string conocido (excluye CAMPUS_TOTAL, Bloques 10-11)
     kpi_long = (kpi_raw[kpi_raw['kpi'].isin(_KPI_MAP)]
@@ -324,6 +313,32 @@ def cargar_datos():
         raw['fecha'] = pd.to_datetime(raw['time_index_colombia'].dt.date)
     except FileNotFoundError:
         raw = None
+
+    # ── CO₂ desde activeenergyimport (deltas diarios, resets → 0) ────────────
+    if raw is not None and 'activeenergyimport' in raw.columns:
+        _co2_rows = []
+        for _eid, _grp in raw.groupby('entity_id'):
+            _b = _CO2_ENTITY_BLOQUE.get(_eid)
+            if _b is None:
+                continue
+            _g = _grp.sort_values('time_index_colombia')[['fecha', 'activeenergyimport']].copy()
+            _g['delta_wh'] = _g['activeenergyimport'].diff().clip(lower=0).fillna(0)
+            _d = _g.groupby('fecha')['delta_wh'].sum().reset_index()
+            _d['bloque']     = _b
+            _d['CO2_tCO2e']  = _d['delta_wh'] * FACTOR_EMISION_CO2
+            _co2_rows.append(_d[['bloque', 'fecha', 'CO2_tCO2e']])
+        if _co2_rows:
+            _co2_daily = (pd.concat(_co2_rows, ignore_index=True)
+                          .groupby(['bloque', 'fecha'], as_index=False)['CO2_tCO2e'].sum())
+            ind = ind.drop(columns=['CO2_tCO2e'], errors='ignore').merge(
+                _co2_daily, on=['bloque', 'fecha'], how='left')
+            _co2_daily['mes'] = _co2_daily['fecha'].dt.to_period('M').dt.strftime('%Y-%m')
+            _co2_monthly = (_co2_daily.groupby(['bloque', 'mes'], as_index=False)['CO2_tCO2e']
+                            .sum().rename(columns={'CO2_tCO2e': 'KPI05_CO2_tCO2e'}))
+            _co2_monthly['fecha'] = (pd.to_datetime(_co2_monthly['mes'] + '-01')
+                                     + pd.offsets.MonthEnd(0))
+            kpi = pd.merge(kpi, _co2_monthly[['bloque', 'fecha', 'KPI05_CO2_tCO2e']],
+                           on=['bloque', 'fecha'], how='left')
 
     # ── Combinar B9.1 (SFA1) + B9.2 (SFA2) → B9 ─────────────────────────────
     _b9_ind = ind['bloque'].isin(['9.1', '9.2'])
@@ -1272,7 +1287,9 @@ with tab_kpi:
 
     # ── KPI 05 — Emisiones CO₂ acumuladas ────────────────────────────────────
     st.markdown("## KPI 05 — Emisiones CO₂ acumuladas vs. meta")
-    actual_diario = kpi_f.groupby('fecha')['KPI05_CO2_tCO2e'].sum().sort_index()
+    _k5_ok = 'KPI05_CO2_tCO2e' in kpi_f.columns
+    actual_diario = (kpi_f.groupby('fecha')['KPI05_CO2_tCO2e'].sum().sort_index()
+                     if _k5_ok else pd.Series(dtype=float))
     if not actual_diario.empty:
         actual_acum   = actual_diario.cumsum()
         mu_co2        = float(actual_diario.mean())
