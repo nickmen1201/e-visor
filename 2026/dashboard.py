@@ -10,19 +10,65 @@ _chart_n = [0]
 
 def _chart(fig, **kwargs):
     _chart_n[0] += 1
+    ucw = kwargs.pop('use_container_width', None)   # API deprecada → width=
+    if ucw is not None:
+        kwargs.setdefault('width', 'stretch' if ucw else 'content')
     st.plotly_chart(fig, key=f"c{_chart_n[0]}", **kwargs)
 
 st.set_page_config(page_title="E-Visor · Ecocampus UPB", layout="wide",
                    initial_sidebar_state="expanded")
 
-# ── Paleta ────────────────────────────────────────────────────────────────────
-C_TEAL   = '#1A5C38'   # verde oscuro institucional (positivo / objetivo)
-C_AMBER  = '#C07B00'   # ámbar dorado (advertencia — máxima distancia del verde y rojo)
-C_RED    = '#B01C1C'   # rojo oscuro (alerta)
-C_GRAY   = '#9AABB8'   # gris azulado claro (referencia / MA7)
-C_BLUE   = '#1F5CA8'   # azul medio (barras comparativas)
-C_PURPLE = '#7B3EA7'   # violeta claro (líneas secundarias — distinto del azul)
-C_BG     = '#F8F9FA'   # fondo principal
+# ── Sistema de diseño ───────────────────────────────────────────────────────
+# Paleta validada con dataviz/scripts/validate_palette.js (light + dark: PASS).
+#
+# STATUS (reservado — solo semáforo, nunca como color de serie):
+C_TEAL   = '#157347'   # verde — positivo / cumple objetivo
+C_AMBER  = '#B7791F'   # ámbar — advertencia (máx. distancia perceptual del verde/rojo)
+C_RED    = '#B42318'   # rojo  — alerta
+# CATEGÓRICO (identidad — orden fijo, nunca cíclico):
+C_BLUE   = '#1F5CA8'   # azul medio (barras comparativas / serie 1)
+C_PURPLE = '#7B3EA7'   # violeta   (líneas secundarias / serie 2)
+C_GRAY   = '#8A97A6'   # gris azulado (referencia / media móvil)
+C_BG     = '#F6F8FA'   # fondo principal
+
+# Tokens de superficie y tinta (data-product claro)
+INK      = '#0E1726'   # texto principal / números
+INK2     = '#5A6675'   # texto secundario / ejes
+MUTED    = '#8A97A6'   # texto terciario / captions
+SURFACE  = '#FFFFFF'   # tarjetas
+BORDER   = '#E6E9EF'   # bordes discretos
+GRID     = '#EFF2F6'   # grillas recesivas
+# Acento de marca UPB (magenta→violeta) — SOLO detalles, nunca dato
+BRAND_A  = '#FF003D'
+BRAND_B  = '#AD3DFF'
+
+# ── Plantilla global de Plotly (todas las figuras heredan de aquí) ────────────
+import plotly.io as pio
+
+_FONT = 'IBM Plex Sans, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+_MONO = 'IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace'
+
+pio.templates['evisor'] = go.layout.Template(layout=dict(
+    font=dict(family=_FONT, size=12, color=INK),
+    paper_bgcolor=SURFACE, plot_bgcolor=SURFACE,
+    colorway=[C_BLUE, C_PURPLE, C_TEAL, C_AMBER, C_RED, C_GRAY],
+    barcornerradius=4,
+    title=dict(font=dict(family=_FONT, size=13, color=INK), x=0, xref='paper'),
+    margin=dict(t=48, b=44, l=64, r=24),
+    xaxis=dict(gridcolor=GRID, linecolor=BORDER, zerolinecolor=GRID,
+               tickfont=dict(size=11, color=INK2),
+               title=dict(font=dict(size=11.5, color=INK2))),
+    yaxis=dict(gridcolor=GRID, linecolor=BORDER, zerolinecolor=GRID,
+               tickfont=dict(size=11, color=INK2),
+               title=dict(font=dict(size=11.5, color=INK2))),
+    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1,
+                font=dict(size=11, color=INK2), bgcolor='rgba(0,0,0,0)'),
+    colorscale=dict(sequential=[
+        [0.0, '#EAF0F8'], [0.5, '#5A8AC6'], [1.0, C_BLUE]]),
+    hoverlabel=dict(font=dict(family=_FONT, size=12), bgcolor=INK,
+                    bordercolor=INK, font_color='#FFFFFF'),
+))
+pio.templates.default = 'evisor'
 
 BASE = Path(__file__).parent
 
@@ -76,107 +122,112 @@ UMBRAL_DB_ALERT = 3.0   # JSON spec: alerta ≥ 3%
 
 _DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# ── CSS · Sistema de diseño (data-product, tema claro) ────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-body {
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
-                 'Segoe UI', Helvetica, Arial, sans-serif;
-}
-h1, h2, h3, h4, h5, h6,
-p, li, td, th,
-label, input, textarea, select,
-[data-testid="stMetricLabel"],
-[data-testid="stMetricValue"],
-[data-testid="stWidgetLabel"],
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] h1,
-[data-testid="stMarkdownContainer"] h2,
-[data-testid="stMarkdownContainer"] h3,
-[data-testid="stCaptionContainer"] p {
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
-                 'Segoe UI', Helvetica, Arial, sans-serif !important;
+:root{
+  --ink:#0E1726; --ink2:#5A6675; --muted:#8A97A6;
+  --surface:#FFFFFF; --app:#F6F8FA; --border:#E6E9EF; --border-strong:#D8DDE6;
+  --ok:#157347; --warn:#B7791F; --bad:#B42318;
+  --brand-a:#FF003D; --brand-b:#AD3DFF;
+  --font:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 
-[data-testid="stAppViewContainer"] { background: #F8F9FA; }
+html, body, [class*="css"]{ font-family:var(--font); }
+h1,h2,h3,h4,h5,h6,p,li,td,th,label,input,textarea,select,
+[data-testid="stMetricLabel"],[data-testid="stMetricValue"],[data-testid="stWidgetLabel"],
+[data-testid="stMarkdownContainer"] p,[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,[data-testid="stMarkdownContainer"] h3,
+[data-testid="stCaptionContainer"] p{ font-family:var(--font) !important; }
 
-[data-testid="stSidebar"] {
-    background: #FFFFFF;
-    border-right: 3px solid transparent;
-    border-image: linear-gradient(180deg, #FF003D 0%, #AD3DFF 100%) 1;
-}
+[data-testid="stAppViewContainer"]{ background:var(--app); }
+.block-container{ padding-top:2.4rem; padding-bottom:3rem; max-width:1180px; }
 
-h1 {
-    font-size: 1.45rem !important;
-    font-weight: 600 !important;
-    color: #0D1B2A !important;
-    letter-spacing: -0.015em !important;
-}
-h2 {
-    font-size: 0.65rem !important;
-    font-weight: 600 !important;
-    color: #64748B !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.10em !important;
-    border-bottom: 1px solid #DDE2EA !important;
-    padding-bottom: 7px !important;
-    margin-top: 2.4rem !important;
-    margin-bottom: 0.8rem !important;
-}
-h3 {
-    font-size: 0.9rem !important;
-    font-weight: 500 !important;
-    color: #1B2A3B !important;
+/* Sidebar — hairline de marca a la derecha */
+[data-testid="stSidebar"]{ background:var(--surface); border-right:1px solid var(--border); }
+[data-testid="stSidebar"]::after{
+  content:""; position:absolute; top:0; right:0; width:2px; height:100%;
+  background:linear-gradient(180deg,var(--brand-a) 0%,var(--brand-b) 100%);
 }
 
-div[data-testid="metric-container"] {
-    background: #FFFFFF;
-    border: 1px solid #DDE2EA;
-    border-top: 3px solid #FF003D;
-    border-radius: 2px;
-    padding: 16px 20px;
-}
-div[data-testid="metric-container"] label {
-    font-size: .68rem !important;
-    font-weight: 500 !important;
-    color: #64748B !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.07em !important;
-}
-div[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    font-size: 1.45rem !important;
-    font-weight: 600 !important;
-    color: #0D1B2A !important;
-}
+/* Cifras SIEMPRE en mono tabular — sello del data-product */
+[data-testid="stMetricValue"], .ev-value, .num,
+[data-testid="stMetricDelta"]{ font-family:var(--mono) !important; font-feature-settings:"tnum" 1,"lnum" 1; }
 
-.kpi-card {
-    background: #FFFFFF;
-    border: 1px solid #DDE2EA;
-    border-top: 3px solid #FF003D;
-    border-radius: 2px;
-    padding: 16px 20px;
-    height: 100%;
-}
+/* Jerarquía tipográfica */
+h1{ font-size:1.55rem !important; font-weight:600 !important; color:var(--ink) !important;
+    letter-spacing:-0.02em !important; line-height:1.15 !important; }
+h2{ font-size:.68rem !important; font-weight:600 !important; color:var(--ink2) !important;
+    text-transform:uppercase !important; letter-spacing:0.13em !important;
+    padding-bottom:8px !important; margin-top:2.6rem !important; margin-bottom:1rem !important;
+    border-bottom:1px solid var(--border) !important; position:relative; }
+h2::before{ content:""; position:absolute; left:0; bottom:-1px; width:34px; height:2px;
+    background:linear-gradient(90deg,var(--brand-a),var(--brand-b)); }
+h3{ font-size:.92rem !important; font-weight:600 !important; color:var(--ink) !important;
+    letter-spacing:-0.01em !important; }
 
-.status-verde { color: #1A5C38; font-weight: 600; }
-.status-ambar { color: #C07B00; font-weight: 600; }
-.status-rojo  { color: #B01C1C; font-weight: 600; }
+/* st.metric → tarjeta limpia */
+div[data-testid="stMetric"], div[data-testid="metric-container"]{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:16px 18px; box-shadow:0 1px 2px rgba(16,23,38,.04); }
+div[data-testid="stMetric"] label, div[data-testid="metric-container"] label{
+  font-size:.66rem !important; font-weight:600 !important; color:var(--ink2) !important;
+  text-transform:uppercase !important; letter-spacing:0.08em !important; }
+[data-testid="stMetricValue"]{ font-size:1.5rem !important; font-weight:600 !important; color:var(--ink) !important; }
 
-button[data-baseweb="tab"] p {
-    font-size: 0.72rem !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-}
+/* Header / topbar */
+.ev-topbar{ display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+  margin:2px 0 2px 0; }
+.ev-topbar .ev-sub{ font-size:.82rem; color:var(--ink2); }
+.ev-rule{ height:2px; border:0; margin:14px 0 6px 0;
+  background:linear-gradient(90deg,var(--brand-a) 0%,var(--brand-b) 42%,var(--border) 42%,var(--border) 100%); }
 
-hr { border-color: #DDE2EA !important; margin: 1.2rem 0 !important; }
+/* Grid de KPIs hero */
+.ev-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin:8px 0 4px 0; }
+.ev-kpi{ background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:16px 18px 14px 18px; box-shadow:0 1px 2px rgba(16,23,38,.04);
+  transition:box-shadow .15s ease,transform .15s ease; }
+.ev-kpi:hover{ box-shadow:0 6px 20px rgba(16,23,38,.08); transform:translateY(-1px); }
+.ev-eyebrow{ font-size:.64rem; font-weight:600; color:var(--ink2); text-transform:uppercase;
+  letter-spacing:0.1em; margin-bottom:8px; }
+.ev-value{ font-size:1.85rem; font-weight:600; color:var(--ink); line-height:1; letter-spacing:-0.01em; }
+.ev-unit{ font-family:var(--font); font-size:.82rem; font-weight:500; color:var(--muted); margin-left:4px; }
+.ev-spark{ margin:10px 0 8px 0; height:30px; }
+.ev-foot{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:.76rem; color:var(--ink2); }
+.ev-delta{ font-family:var(--mono); font-feature-settings:"tnum" 1; }
 
-[data-testid="stCaptionContainer"] p {
-    font-size: 0.73rem !important;
-    color: #64748B !important;
-}
+/* Pills de estado (siempre punto + palabra, nunca color solo) */
+.pill{ display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px;
+  font-size:.7rem; font-weight:600; line-height:1.5; letter-spacing:.01em; border:1px solid transparent; }
+.pill::before{ content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.pill-ok{ color:var(--ok);  background:rgba(21,115,71,.09);  border-color:rgba(21,115,71,.18); }
+.pill-warn{ color:var(--warn); background:rgba(183,121,31,.10); border-color:rgba(183,121,31,.20); }
+.pill-bad{ color:var(--bad);  background:rgba(180,35,24,.09);  border-color:rgba(180,35,24,.18); }
+.pill-demo{ color:#6B48B0; background:rgba(122,62,167,.09); border-color:rgba(122,62,167,.18); }
+
+.status-verde{ color:var(--ok); font-weight:600; }
+.status-ambar{ color:var(--warn); font-weight:600; }
+.status-rojo{ color:var(--bad); font-weight:600; }
+
+/* Tabs — subrayado de marca en la activa */
+button[data-baseweb="tab"]{ padding-left:2px !important; padding-right:2px !important; }
+button[data-baseweb="tab"] p{ font-size:.72rem !important; font-weight:600 !important;
+  text-transform:uppercase !important; letter-spacing:0.09em !important; color:var(--ink2) !important; }
+button[data-baseweb="tab"][aria-selected="true"] p{ color:var(--ink) !important; }
+[data-baseweb="tab-highlight"], [data-baseweb="tab-border"] div{
+  background:linear-gradient(90deg,var(--brand-a),var(--brand-b)) !important; }
+div[data-baseweb="tab-list"]{ gap:26px; border-bottom:1px solid var(--border); }
+
+/* Bloques de contexto (info/callout) */
+.ev-note{ border:1px solid var(--border); border-left:3px solid var(--warn);
+  background:#FCFAF5; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
+
+hr{ border-color:var(--border) !important; margin:1.2rem 0 !important; }
+[data-testid="stCaptionContainer"] p{ font-size:.73rem !important; color:var(--muted) !important; }
+[data-testid="stDivider"]{ margin:.4rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -392,18 +443,66 @@ def _semaforo(v, obj, alert, mayor_es_mejor=True):
         return C_TEAL if v <= obj else (C_AMBER if v <= alert else C_RED)
 
 
-def _layout_base(fig, h=360):
-    fig.update_layout(
-        plot_bgcolor='#FFFFFF', paper_bgcolor='#FFFFFF',
-        height=h, margin=dict(t=48, b=44, l=64, r=24),
-        font=dict(family='IBM Plex Sans, Arial, sans-serif', size=12, color='#1B2A3B'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02,
-                    xanchor='right', x=1, font=dict(size=11),
-                    bgcolor='rgba(0,0,0,0)', borderwidth=0),
+def _estado_from_color(c):
+    """Traduce el color de semáforo a clave de estado ('ok'|'warn'|'bad')."""
+    return 'ok' if c == C_TEAL else ('warn' if c == C_AMBER else 'bad')
+
+
+def _pill(estado, texto=None):
+    """Etiqueta de estado (punto + palabra) — nunca color solo."""
+    _txt = texto or {'ok': 'cumple', 'warn': 'revisar',
+                     'bad': 'alerta', 'demo': 'referencia'}.get(estado, estado)
+    return f'<span class="pill pill-{estado}">{_txt}</span>'
+
+
+def _sparkline_svg(vals, color=C_BLUE, w=160, h=30, pad=3):
+    """Mini-tendencia como SVG inline (stroke no escalado, área con degradado)."""
+    v = [float(x) for x in vals if x == x]
+    if len(v) < 2:
+        return ''
+    lo, hi = min(v), max(v)
+    rng = (hi - lo) or 1.0
+    n = len(v)
+    xs = [pad + i * (w - 2 * pad) / (n - 1) for i in range(n)]
+    ys = [h - pad - (val - lo) / rng * (h - 2 * pad) for val in v]
+    line = ' '.join(f'{x:.1f},{y:.1f}' for x, y in zip(xs, ys))
+    area = f'{xs[0]:.1f},{h - pad:.1f} ' + line + f' {xs[-1]:.1f},{h - pad:.1f}'
+    uid = f'sp{abs(hash((tuple(v), color))) % 999999}'
+    return (
+        f'<svg width="100%" height="{h}" viewBox="0 0 {w} {h}" '
+        f'preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
+        f'<defs><linearGradient id="{uid}" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0" stop-color="{color}" stop-opacity="0.22"/>'
+        f'<stop offset="1" stop-color="{color}" stop-opacity="0"/></linearGradient></defs>'
+        f'<polygon points="{area}" fill="url(#{uid})"/>'
+        f'<polyline points="{line}" fill="none" stroke="{color}" stroke-width="1.7" '
+        f'stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>'
+        f'<circle cx="{xs[-1]:.1f}" cy="{ys[-1]:.1f}" r="2.4" fill="{color}" '
+        f'vector-effect="non-scaling-stroke"/></svg>'
     )
-    fig.update_xaxes(gridcolor='#EEF0F3', linecolor='#DDE2EA', tickfont=dict(size=11))
-    fig.update_yaxes(gridcolor='#EEF0F3', linecolor='#DDE2EA', rangemode='tozero',
-                     tickfont=dict(size=11))
+
+
+def _kpi_card(eyebrow, value, unit='', estado=None, spark=None, foot='', pill_txt=None):
+    """Tarjeta KPI hero (HTML): etiqueta, número tabular, sparkline, pill + contexto."""
+    body = [
+        f'<div class="ev-eyebrow">{eyebrow}</div>',
+        f'<div class="ev-value num">{value}'
+        f'{f"<span class=ev-unit>{unit}</span>" if unit else ""}</div>',
+        f'<div class="ev-spark">{spark or ""}</div>',
+    ]
+    foot_bits = []
+    if estado:
+        foot_bits.append(_pill(estado, pill_txt))
+    if foot:
+        foot_bits.append(f'<span class="ev-delta">{foot}</span>')
+    body.append(f'<div class="ev-foot">{"".join(foot_bits)}</div>')
+    return f'<div class="ev-kpi">{"".join(body)}</div>'
+
+
+def _layout_base(fig, h=360):
+    # Colores, fuente, grillas y leyenda vienen de la plantilla 'evisor'.
+    fig.update_layout(height=h, margin=dict(t=48, b=44, l=64, r=24))
+    fig.update_yaxes(rangemode='tozero')
     return fig
 
 
@@ -451,20 +550,21 @@ def serie_diaria(ind_df, col, titulo_y, titulo='Evolución diaria', h=320):
     fig.add_trace(go.Scatter(
         x=laboral.index, y=laboral['val'], mode='lines+markers',
         name='Día hábil',
-        line=dict(color=C_TEAL, width=1.8),
-        marker=dict(color=C_TEAL, size=5),
+        line=dict(color=C_BLUE, width=2),
+        marker=dict(color=C_BLUE, size=7, line=dict(color='#FFFFFF', width=1)),
         hovertemplate='%{x|%d %b}: %{y:.3f}<extra>Hábil</extra>',
     ))
     fig.add_trace(go.Scatter(
         x=finde.index, y=finde['val'], mode='markers',
         name='Fin de semana',
-        marker=dict(color=C_AMBER, size=8, symbol='diamond'),
+        marker=dict(color=C_PURPLE, size=9, symbol='diamond',
+                    line=dict(color='#FFFFFF', width=1)),
         hovertemplate='%{x|%d %b}: %{y:.3f}<extra>Fin de semana</extra>',
     ))
     fig.add_trace(go.Scatter(
         x=df_s.index, y=df_s['ma7'], mode='lines',
         name='Media móvil 7d',
-        line=dict(color=C_GRAY, width=2.5, dash='dot'), opacity=0.8,
+        line=dict(color=C_GRAY, width=2, dash='dot'), opacity=0.9,
         hovertemplate='%{x|%d %b}: %{y:.3f}<extra>MA7</extra>',
     ))
     fig.update_layout(
@@ -801,13 +901,15 @@ bloque_txt = ("Todos los bloques" if seleccion == "Todos"
               else f"Bloque {_bloque_label(seleccion)}")
 periodo_dias = max(1, (fin - inicio).days + 1)
 
-st.markdown(f"# E-Visor — Sistema de monitoreo energético")
 st.markdown(
-    f"**{bloque_txt}** &nbsp;·&nbsp; "
-    f"{inicio.strftime('%d %b %Y')} — {fin.strftime('%d %b %Y')} "
-    f"({periodo_dias} días)"
+    '<div class="ev-topbar">'
+    '<h1>Monitoreo energético del Ecocampus</h1>'
+    f'<div class="ev-sub"><b>{bloque_txt}</b> &nbsp;·&nbsp; '
+    f'{inicio.strftime("%d %b %Y")} — {fin.strftime("%d %b %Y")} · {periodo_dias} días</div>'
+    '</div>'
+    '<hr class="ev-rule"/>',
+    unsafe_allow_html=True,
 )
-st.divider()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -827,56 +929,71 @@ fp_medio         = float(kpi_f['KPI11_fp'].mean()) if 'KPI11_fp' in kpi_f.column
 db_medio         = float(ind_f['desbalance_pct'].mean()) if 'desbalance_pct' in ind_f.columns and not ind_f['desbalance_pct'].dropna().empty else None
 pico_max         = float(kpi_f['KPI03_pico_kw'].max()) if 'KPI03_pico_kw' in kpi_f.columns and not kpi_f['KPI03_pico_kw'].dropna().empty else None
 
-_res_f1, _res_f2, _res_f3 = st.columns(3)
-with _res_f1:
-    if total_kwh_campus:
-        costo = total_kwh_campus * TARIFA_BASE_COP_KWH
-        st.metric("Energía consumida", f"{total_kwh_campus:,.0f} kWh",
-                  help=f"Costo estimado: ${costo:,.0f} COP (EPM NT1 ene-2026)")
-    else:
-        st.metric("Energía consumida", "—")
 
-with _res_f2:
-    if co2_total is not None:
-        st.metric("Emisiones CO₂", f"{co2_total:.2f} tCO₂e",
-                  help=f"≈ {int(co2_total * ARBOLES_POR_TON_CO2):,} árboles jóvenes")
-    else:
-        st.metric("Emisiones CO₂", "—")
+def _svals(df, by, col, agg='mean'):
+    if df is None or col not in df.columns:
+        return []
+    s = df.groupby(by)[col].agg(agg).sort_index().dropna()
+    return s.tolist()
 
-with _res_f3:
-    if lf_medio is not None:
-        color_lf = "normal" if lf_medio >= 0.65 else "inverse"
-        st.metric("Load Factor medio", f"{lf_medio:.2f}",
-                  delta="≥ 0.65 objetivo" if lf_medio >= 0.65 else "< 0.65 alerta",
-                  delta_color=color_lf)
-    else:
-        st.metric("Load Factor medio", "—")
+# Series de tendencia (sparklines)
+_sp_co2 = _svals(ind_f, 'fecha', 'CO2_tCO2e', 'sum')
+_sp_lf  = _svals(ind_f, 'fecha', 'LF', 'mean')
+_sp_db  = _svals(ind_f, 'fecha', 'desbalance_pct', 'mean')
+_sp_fp  = _svals(kpi_f, 'fecha', 'KPI11_fp', 'mean')
+_sp_pk  = _svals(kpi_f, 'fecha', 'KPI03_pico_kw', 'max')
+_sp_en  = _svals(raw_f, 'fecha', 'activepower', 'sum') if raw_f is not None else []
 
-_res_s1, _res_s2, _res_s3 = st.columns(3)
-with _res_s1:
-    if pico_max is not None:
-        st.metric("Pico de demanda", f"{pico_max:.2f} kW",
-                  help="Máximo registrado en el período")
-    else:
-        st.metric("Pico de demanda", "—")
+_cards = []
 
-with _res_s2:
-    if fp_medio is not None:
-        delta_fp = "Cumple objetivo" if fp_medio >= UMBRAL_FP_OBJ else ("Revisar" if fp_medio >= UMBRAL_FP_ALERT else "Alerta")
-        st.metric("Factor de potencia", f"{fp_medio:.2f}",
-                  delta=delta_fp,
-                  delta_color="normal" if fp_medio >= UMBRAL_FP_OBJ else "inverse")
-    else:
-        st.metric("Factor de potencia", "—")
+# Energía
+if total_kwh_campus:
+    _costo = total_kwh_campus * TARIFA_BASE_COP_KWH
+    _cards.append(_kpi_card('Energía consumida', f'{total_kwh_campus:,.0f}', 'kWh',
+                            spark=_sparkline_svg(_sp_en), foot=f'${_costo:,.0f} COP'))
+else:
+    _cards.append(_kpi_card('Energía consumida', '—'))
 
-with _res_s3:
-    if db_medio is not None:
-        delta_db = "Normal" if db_medio < UMBRAL_DB_OBJ else ("Revisar" if db_medio < UMBRAL_DB_ALERT else "Alerta")
-        st.metric("Desbalance de tensión", f"{db_medio:.2f}%",
-                  delta=delta_db,
-                  delta_color="normal" if db_medio < UMBRAL_DB_OBJ else "inverse")
-    else:
-        st.metric("Desbalance de tensión", "—")
+# CO₂
+if co2_total is not None:
+    _arb = int(co2_total * ARBOLES_POR_TON_CO2)
+    _cards.append(_kpi_card('Emisiones CO₂', f'{co2_total:.2f}', 'tCO₂e',
+                            spark=_sparkline_svg(_sp_co2), foot=f'≈ {_arb:,} árboles'))
+else:
+    _cards.append(_kpi_card('Emisiones CO₂', '—'))
+
+# Load Factor
+if lf_medio is not None:
+    _e = _estado_from_color(_semaforo(lf_medio, 0.65, 0.50))
+    _cards.append(_kpi_card('Load Factor medio', f'{lf_medio:.2f}', '',
+                            estado=_e, spark=_sparkline_svg(_sp_lf), foot='obj ≥ 0.65'))
+else:
+    _cards.append(_kpi_card('Load Factor medio', '—'))
+
+# Pico de demanda
+if pico_max is not None:
+    _cards.append(_kpi_card('Pico de demanda', f'{pico_max:.1f}', 'kW',
+                            spark=_sparkline_svg(_sp_pk), foot='máx. del período'))
+else:
+    _cards.append(_kpi_card('Pico de demanda', '—'))
+
+# Factor de potencia
+if fp_medio is not None:
+    _e = _estado_from_color(_semaforo(fp_medio, UMBRAL_FP_OBJ, UMBRAL_FP_ALERT))
+    _cards.append(_kpi_card('Factor de potencia', f'{fp_medio:.2f}', '',
+                            estado=_e, spark=_sparkline_svg(_sp_fp), foot='obj ≥ 0.90'))
+else:
+    _cards.append(_kpi_card('Factor de potencia', '—'))
+
+# Desbalance de tensión
+if db_medio is not None:
+    _e = _estado_from_color(_semaforo(db_medio, UMBRAL_DB_OBJ, UMBRAL_DB_ALERT, mayor_es_mejor=False))
+    _cards.append(_kpi_card('Desbalance de tensión', f'{db_medio:.2f}', '%',
+                            estado=_e, spark=_sparkline_svg(_sp_db), foot='obj < 2%'))
+else:
+    _cards.append(_kpi_card('Desbalance de tensión', '—'))
+
+st.markdown(f'<div class="ev-grid">{"".join(_cards)}</div>', unsafe_allow_html=True)
 
 st.divider()
 
