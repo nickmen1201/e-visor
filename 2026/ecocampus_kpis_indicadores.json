@@ -8,6 +8,7 @@
     "año": 2026,
     "version_documento": "Indicadores_y_KPI_26_1_3",
     "descripcion_sistema": "Sistema de indicadores y KPIs energéticos para el Ecocampus UPB. Transforma datos de sensores IoT en métricas estratégicas para la toma de decisiones. Se integra con FIWARE como componente tecnológico clave y se despliega en tableros Venios con actualización automática.",
+    "nota_variable_energia": "activeenergyimport es un CONTADOR ACUMULADO en Wh, no el consumo del período. Δactiveenergyimport = diferencia consecutiva por medidor (diff() ordenado por time_index_colombia, recortada en 0 para absorber reinicios del contador). Los CSV Landis también traen activeenergyimportday, pero la implementación usa el contador acumulado porque conserva la resolución horaria.",
     "fuentes_de_datos_disponibles": [
       "Medidores Landis (etsmartmeter / CSV Landis) — consumo eléctrico por bloque",
       "Inversor Fronius Bloque 11 (etfroniusinverter) — generación FV",
@@ -142,13 +143,13 @@
     {
       "id": "IND-07",
       "nombre": "Emisiones de CO₂ (indicador descriptivo)",
-      "formula": "CO₂ [tCO₂e] = 9.7018×10⁻⁸ × suma(activeenergyimportday [Wh])",
-      "formula_alternativa": "CO₂ [tCO₂e] = FE_2025 × Σ(activeenergyimportday ÷ 1000) donde FE_2025 = 0.000097018 tCO₂e/kWh",
+      "formula": "CO₂ [tCO₂e] = 9.7018×10⁻⁸ × suma(Δactiveenergyimport [Wh])",
+      "formula_alternativa": "CO₂ [tCO₂e] = FE_2025 × Σ(Δactiveenergyimport ÷ 1000) donde FE_2025 = 0.000097018 tCO₂e/kWh",
       "explicacion": "Conversión del consumo eléctrico a toneladas de CO₂ equivalente mediante el factor de emisión de la red colombiana (SIN). Este indicador descriptivo alimenta al KPI 05.",
       "variables": [
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía activa consumida en el día",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía activa importada — contador acumulado del medidor; la energía del período se obtiene con diff() por medidor",
           "unidad": "Wh (dividir entre 1000 para obtener kWh)",
           "fuente": "Medidores Landis (etsmartmeter / CSV Landis)"
         }
@@ -244,8 +245,8 @@
       "explicacion": "Cuantifica cuánto se redujo el consumo energético respecto a un período base. Alimenta al KPI 04 (Ahorro energético verificado).",
       "variables": [
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía activa consumida en el día",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía activa importada — contador acumulado del medidor; la energía del período se obtiene con diff() por medidor",
           "unidad": "Wh → kWh (÷1000)",
           "fuente": "Medidores Landis"
         }
@@ -325,13 +326,13 @@
       },
       "rol_en_sistema": "Mide cuánta energía eléctrica consume cada metro cuadrado del campus por mes. Es el indicador de eficiencia más universal para edificios. Permite comparar bloques entre sí y con referencias nacionales. Sin este KPI no es posible saber si el consumo del campus es alto o bajo en relación con su tamaño.",
       "por_que_es_kpi": "Tiene umbral de referencia (orientador de la UPME y luego propio desde datos reales). Al superarlo, se activa revisión para identificar qué bloque consume en exceso y por qué. Obligatorio según Lineamientos del proyecto e-Visor (Sección 5, 'base mínima').",
-      "formula": "IE_área = Σ(activeenergyimportday ÷ 1000) / Área_bloque",
+      "formula": "IE_área = Σ(Δactiveenergyimport ÷ 1000) / Área_bloque",
       "unidad": "kWh/m²",
       "periodo": "Mensual",
       "variables": [
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía activa consumida en el día",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía activa importada — contador acumulado del medidor; la energía del período se obtiene con diff() por medidor",
           "unidad": "Wh → kWh (÷1000)",
           "fuente": "Medidores Landis (etsmartmeter / CSV Landis)"
         }
@@ -368,13 +369,13 @@
       },
       "rol_en_sistema": "Conecta el consumo energético con la actividad académica del campus. Permite detectar si el consumo crece porque hay más personas o porque los sistemas son ineficientes. Útil para comparar semestres lectivos con períodos de vacaciones y para justificar inversiones en eficiencia.",
       "por_que_es_kpi": "Tiene umbral calculado desde datos reales del primer año. Al superarlo, genera revisión. Obligatorio según Lineamientos e-Visor (Sección 5, 'base mínima'). La gestión energética formalizada exige que el rendimiento se mida respecto a una unidad funcional.",
-      "formula": "IE = Σ(activeenergyimportday ÷ 1000) / N_usuarios_activos",
+      "formula": "IE = Σ(Δactiveenergyimport ÷ 1000) / N_usuarios_activos",
       "unidad": "kWh/usuario·mes",
       "periodo": "Mensual / semestral",
       "variables": [
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía activa consumida en el día",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía activa importada — contador acumulado del medidor; la energía del período se obtiene con diff() por medidor",
           "unidad": "Wh → kWh (÷1000)",
           "fuente": "Medidores Landis (etsmartmeter)"
         }
@@ -452,8 +453,8 @@
       "periodo": "Anual",
       "variables": [
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía activa consumida en el período actual",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía activa importada en el período actual — contador acumulado del medidor; la energía del período se obtiene con diff() por medidor",
           "unidad": "Wh → kWh (÷1000)",
           "fuente": "Medidores Landis"
         }
@@ -488,14 +489,14 @@
       },
       "rol_en_sistema": "Convierte el consumo eléctrico en toneladas de CO₂ equivalente emitidas a la atmósfera usando el factor de emisión del SIN colombiano. Permite comunicar el impacto ambiental del campus en términos comprensibles para audiencias no técnicas. Es el indicador clave para el reporte de sostenibilidad institucional y el seguimiento de metas de la Ley 2169 de 2021.",
       "por_que_es_kpi": "Tiene dos umbrales: meta operativa anual del 3 % (genera acción si no se alcanza) y meta estratégica de carbono neutralidad (horizonte largo plazo). Sin la meta anual, la meta de carbono neutro sola no genera ninguna acción en el corto plazo.",
-      "formula": "CO₂ = FE_año × Σ(activeenergyimportday ÷ 1000)",
-      "formula_desarrollada": "CO₂ [tCO₂e] = 0.000097018 × Σ(activeenergyimportday [Wh] ÷ 1000 [kWh])",
+      "formula": "CO₂ = FE_año × Σ(Δactiveenergyimport ÷ 1000)",
+      "formula_desarrollada": "CO₂ [tCO₂e] = 0.000097018 × Σ(Δactiveenergyimport [Wh] ÷ 1000 [kWh])",
       "unidad": "tCO₂e (toneladas de CO₂ equivalente)",
       "periodo": "Mensual / anual",
       "variables": [
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía activa consumida en el día",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía activa importada — contador acumulado del medidor; la energía del período se obtiene con diff() por medidor",
           "unidad": "Wh → kWh (÷1000)",
           "fuente": "Medidores Landis"
         }
@@ -595,7 +596,7 @@
       },
       "rol_en_sistema": "Responde a la pregunta más común de los grupos de interés no técnicos: ¿qué porcentaje de la energía que usa el campus viene de sus propios paneles solares? Es el indicador de sostenibilidad energética más comprensible para estudiantes, egresados, donantes y comunidad. Estándar GRI para reportes de sostenibilidad empresarial.",
       "por_que_es_kpi": "Tiene umbral orientador con respaldo en Ley 2169/2021 y GRI 302-1. Su monitoreo continuo permite demostrar avance en integración de energía renovable a todos los grupos de interés.",
-      "formula": "SS = [Σ(E_solar_autoconsumida) / Σ(activeenergyimportday÷1000 + E_solar_AC)] × 100",
+      "formula": "SS = [Σ(E_solar_autoconsumida) / Σ(Δactiveenergyimport÷1000 + E_solar_AC)] × 100",
       "formula_proxy": "Si no hay medición de exportación a red: E_solar_autoconsumida ≈ energyproducedtoday (proxy conservador que puede subestimar la autosuficiencia real)",
       "unidad": "%",
       "periodo": "Mensual / anual",
@@ -607,8 +608,8 @@
           "fuente": "Fronius (etfroniusinverter, Bloque 11) y Enphase (etenphaseinverter, Bloque 10)"
         },
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía consumida desde la red",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía importada desde la red — contador acumulado del medidor; la energía del período se obtiene con diff() por medidor",
           "unidad": "Wh → kWh (÷1000)",
           "fuente": "Medidores Landis"
         }
@@ -684,8 +685,8 @@
       },
       "variables": [
         {
-          "nombre": "activeenergyimportday",
-          "descripcion": "Energía activa consumida, segmentada por franja horaria usando time_index_colombia",
+          "nombre": "activeenergyimport",
+          "descripcion": "Energía activa importada, segmentada por franja horaria usando time_index_colombia — contador acumulado; energía horaria con diff() por medidor",
           "unidad": "Wh",
           "fuente": "Medidores Landis (etsmartmeter)"
         }
