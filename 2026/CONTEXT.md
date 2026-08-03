@@ -38,7 +38,7 @@ Source of truth: `ecocampus_kpis_indicadores.json` (v `Indicadores_y_KPI_26_1_3`
 | IND-09 | TCP — Panel temp delta | `mean(T_panel) − mean(T_ambient)` · ~0.4%/°C efficiency loss over TC | paneltemperature · ambienttemperature · source: Fronius sensor | PENDING |
 | IND-10 | EB — Battery efficiency | `Σ(E_from_bat) / Σ(E_to_bat)` | energyfrombattery · energytobattery · source: `Inversor_Baterías` | PENDING |
 | IND-11 | Energy savings | `1 − (E_current / E_base)` | Δactiveenergyimport | PENDING (needs ≥12-mo baseline) |
-| IND-12 | VU — Voltage unbalance | `max(|vₙ−v̄|) / v̄ × 100` · NEMA MG-1 | v1, v2, v3 | REAL |
+| IND-12 | VU — Voltage unbalance | `max(|vₙ−v̄|) / v̄ × 100` | v1, v2, v3 | REAL |
 | IND-13 | FD — Diversity Factor | `Σ max(P_i) / max(Σ P_i)` · i = each of the 16 meters · campus-level, needs timestamp alignment | activepower | REAL |
 
 **Note:** HU (equivalent utilization hours) was dropped — it is not in the JSON spec nor computed by `dashboard.py`. Feeder chain: IND-01→KPI 08 · IND-06→KPI 09 · IND-07→KPI 05 · IND-11→KPI 04 · IND-12→KPI 10.
@@ -51,23 +51,26 @@ Source of truth: `ecocampus_kpis_indicadores.json` (v `Indicadores_y_KPI_26_1_3`
 
 | # | Name | Unit | Formula | Threshold | SDG | ESG axis | Stakeholder | Status | Blocker / ref value |
 |---|---|---|---|---|---|---|---|---|---|
-| 01 | Consumo/m² | kWh/m²·mo | `Σ(E_day÷1000) / Área_bloque` · área from `AREAS 2026.xlsx` | TBD · ref: 8–25 kWh/m²·mo, 124.4 kWh/m²·yr (UPME PGEE) | 7,9 | Regen & resilience | Institutional leaders | REAL | — |
-| 02 | Intensidad por usuario | kWh/user·mo | `Σ(E_day÷1000) / N_users` | TBD after 12-mo cycle (NQA §6.4 functional unit) | 4,7,9 | Conscious leadership | Academic sector | **DEMO** | "Usuario activo" definition pending (students + FTE) · ref=3500 users |
-| 03 | Pico de demanda | kW + timestamp | `max(P)` per period per block · log date, hour and block | TBD: monthly peak mean+1σ (yr 1) | 7,9 | Conscious leadership | Leaders + business | REAL | — |
-| 04 | Ahorro verificado | % | `[1 − Σ(E_act÷1000)/E_base_adj] × 100` · E_base_adj normalized by users+temp (ISO 50001 Annex B) | ≥3% annual (Ley 2169/2021, UPME PGEE) | 7,9,13 | Regen & resilience | All groups | **DEMO** | No 12-mo baseline yet; awaiting EPM data for full-university consumption · ref=prior period×1.03 |
-| 05 | Emisiones CO₂ | tCO₂e | See IND-07 | ≥3% annual reduction; long-term: carbon neutrality (Ley 2169/2021, GRI 302-1) | 7,13,17 | Regen & resilience | Public + community | REAL | ⚠ Replace 0.18 legacy FE everywhere · check whether UPB Sostenibilidad already owns this KPI |
-| 06 | Performance Ratio FV | % | `PR=(YF/RY)×100` · `YF=Σ(E_pv)/P_inst` · `RY=Σ(G×Δt)/1000` | ≥75% target · <65% degradation alert (IEC 61724-1:2017; Kumar et al. 2019: 73–78% tropical) · EU 80% does not apply | 7,9,13 | Regen & resilience | Academic + business | **DEMO** | `solarirradiation` is W/m² (instantaneous) and Fronius time resolution is undefined; kWp unconfirmed — **do not compute until resolved** · ref=PR 73% |
-| 07 | Autosuficiencia solar | % | `Σ(E_solar_self)/Σ(E_grid+E_solar_AC)×100` · if no export meter: `E_self≈energyproducedtoday` (conservative proxy, document it each run) | ≥15% guidance (GRI 302-1, Ley 2169/2021) | 7,13,17 | Regen & resilience | Students + alumni | **DEMO** | `etinverterxw` export unconfirmed; kWp unconfirmed · ref=SS 12% |
-| 08 | Load Factor | 0–1 | See IND-01 · denominator = max of the analysed period, NOT meter rating | ≥0.65 guidance (Papadopoulos et al. 2016: mean 0.67, range 0.55–0.80) | 7,9 | Conscious leadership | Maintenance | REAL | — |
-| 09 | Consumo no operacional | % | `[Σ(E_22h-06h÷1000)/Σ(E_total÷1000)]×100` (=f₄ by energy) · non-op=22:00–05:59 | TBD (yr 1) · qualitative ref: Papadopoulos et al. 2016 — high f₄ is the common pattern in campuses | 7,9 | Regen & resilience | Maintenance | REAL | Threshold pending — see literature note below |
-| 10 | Desbalance de tensión | % | `[max(|vₙ−v̄|)/v̄]×100` NEMA MG-1 | <2% normal · **alert ≥3%** (e-Visor directive; ref. IEEE 1159:2019) | 9 | Conscious leadership | Tech + labs | REAL | — |
-| 11 | Factor de potencia | — | Direct: `totalpowerfactor` | ≥0.9 normal · **alert <0.85** (e-Visor directive; CREG Res. 108/1997 requires ≥0.9) | 9 | Conscious leadership | Finance + ops | REAL | On alert, cross-check with `reactivepower` |
+| 01 | Consumo/m² | kWh/m²·mo | `Σ(E_day÷1000) / Área_bloque` · área from `AREAS 2026.xlsx` | Propio: **media + 1σ** por bloque | 7,9 | Regen & resilience | Institutional leaders | REAL | — |
+| 02 | Intensidad por usuario | kWh/user·mo | `Σ(E_day÷1000) / N_users` | Propio: **media + 1σ** sobre la serie de campus | 4,7,9 | Conscious leadership | Academic sector | **DEMO** | "Usuario activo" definition pending (students + FTE) · ref=3500 users |
+| 03 | Pico de demanda | kW + timestamp | `max(P)` per period per block · log date, hour and block | Propio: **media + 1σ** por bloque | 7,9 | Conscious leadership | Leaders + business | REAL | — |
+| 04 | Ahorro verificado | % | `[1 − Σ(E_act÷1000)/E_base_adj] × 100` · E_base_adj normalized by users+temp | — sin umbral: serie constante en DEMO (σ=0) | 7,9,13 | Regen & resilience | All groups | **DEMO** | No 12-mo baseline yet; awaiting EPM data for full-university consumption · ref=prior period×1.03 |
+| 05 | Emisiones CO₂ | tCO₂e | See IND-07 | Propio: **media + 1σ** por bloque | 7,13,17 | Regen & resilience | Public + community | REAL | ⚠ Replace 0.18 legacy FE everywhere · check whether UPB Sostenibilidad already owns this KPI |
+| 06 | Performance Ratio FV | % | `PR=(YF/RY)×100` · `YF=Σ(E_pv)/P_inst` · `RY=Σ(G×Δt)/1000` | Propio: **media + 1σ** — pendiente de datos | 7,9,13 | Regen & resilience | Academic + business | **DEMO** | `solarirradiation` is W/m² (instantaneous) and Fronius time resolution is undefined; kWp unconfirmed — **do not compute until resolved** · ref=PR 73% |
+| 07 | Autosuficiencia solar | % | `Σ(E_solar_self)/Σ(E_grid+E_solar_AC)×100` · if no export meter: `E_self≈energyproducedtoday` (conservative proxy, document it each run) | Propio: **media + 1σ** — pendiente de datos | 7,13,17 | Regen & resilience | Students + alumni | **DEMO** | `etinverterxw` export unconfirmed; kWp unconfirmed · ref=SS 12% |
+| 08 | Load Factor | 0–1 | See IND-01 · denominator = max of the analysed period, NOT meter rating | Propio: **media − 1σ** por bloque (más es mejor) | 7,9 | Conscious leadership | Maintenance | REAL | — |
+| 09 | Consumo no operacional | % | `[Σ(E_22h-06h÷1000)/Σ(E_total÷1000)]×100` (=f₄ by energy) · non-op=22:00–05:59 | Propio: **media + 1σ** por bloque | 7,9 | Regen & resilience | Maintenance | REAL | — |
+| 10 | Desbalance de tensión | % | `[max(|vₙ−v̄|)/v̄]×100` | Fijo (directriz e-Visor): objetivo <2 % · alerta ≥3 % | 9 | Conscious leadership | Tech + labs | REAL | — |
+| 11 | Factor de potencia | — | Direct: `totalpowerfactor` | Fijo (directriz e-Visor): objetivo ≥0.90 · alerta <0.85 | 9 | Conscious leadership | Finance + ops | REAL | On alert, cross-check with `reactivepower` |
 
 **KPI 12 (THD-V) was dropped** — not in the JSON spec nor in `dashboard.py`. `relativethdvoltage` is still cleaned and kept in the dataset if it is ever reinstated.
 
-**KPI 09 literature (kept from earlier research, not yet adopted as threshold):** Tavakoli et al. 2023, *Sustainability* 15:4240 — UTS Sydney university building, nighttime baseload ~38% of peak; Gul & Patidar 2015, *EnB* 87:155 — Heriot-Watt academic building, ~33% of peak at night. Suggests alert >30% · target <20% · acceptable 20–30%, pending validation with Ecocampus data.
 
-**TBD threshold protocol (KPI 01, 02, 03, 09):** collect 12 months → compute mean+σ per block and period type → alert=mean+1σ, target=mean−10% → validate with stakeholders (A2.4) → review annually.
+**Threshold rule.** Only KPI 10 and KPI 11 carry fixed thresholds, set by e-Visor team directive; they are never recomputed from data. **Every other KPI derives its own** from the 12 months *preceding* the evaluated month (the month being judged is excluded from its own threshold): `alerta = media ± 1σ`, `objetivo = media` mejorada un 7 %, the sign chosen by the KPI's direction — `+1σ` when more is worse (01, 02, 03, 05, 09), `−1σ` when more is better (08). Grouping is per block over its monthly series, except KPI 02, which is campus-level. The 7 % improvement target is the only constant, and it comes from the project's own threshold protocol. No threshold value is written by hand.
+
+Direction lives in exactly one place: the `higher_is_better` flag of `estado_icon()`, which `umbral_propio()` passes straight through. Do not reintroduce a second place that decides it.
+
+Below `n_min = 4` months of base, no verdict is issued: the state is `SIN_BASE`. Every evaluated row carries `n_base`, `ventana_desde`, `ventana_hasta` and `base_completa` so the judgment can be reproduced. `umbral_movil(..., ventana_fija=('2026-01','2026-12'))` freezes the baseline instead of rolling it, for when the first full cycle closes.
 
 ---
 
