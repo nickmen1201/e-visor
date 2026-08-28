@@ -254,6 +254,18 @@ def _bloque_label(entity_id):
     return entity_id.replace('SmartMeter_SM_', 'B')
 
 
+def _bloque_de_medidor(entity_id):
+    """Medidor del CSV crudo → bloque: 'SmartMeter_SM_B7_CTIC' → 'B7'.
+
+    Los identificadores del CSV crudo (por medidor) y los del Excel (por bloque)
+    viven en espacios distintos: un bloque puede tener varios medidores
+    (B7 = CTIC + TAC, B8 = AA + CPA + LABS, B9 = SFA1 + SFA2).
+    """
+    if entity_id in _ENTITY_TO_LABEL:
+        return _ENTITY_TO_LABEL[entity_id]
+    return entity_id.replace('SmartMeter_SM_', '').split('_')[0]
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CARGA DE DATOS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -950,7 +962,10 @@ raw_f = None
 if raw is not None:
     raw_f = raw[raw['fecha'].between(inicio, fin)]
     if seleccion != "Todos":
-        raw_f = raw_f[raw_f['entity_id'] == seleccion]
+        # El crudo va por medidor y la selección por bloque: se comparan
+        # bloque contra bloque, no entity_id contra entity_id.
+        _blq = _bloque_label(seleccion)
+        raw_f = raw_f[raw_f['entity_id'].map(_bloque_de_medidor) == _blq]
 
 if ind_f.empty:
     st.warning("Sin datos para el rango seleccionado.")
@@ -1422,55 +1437,94 @@ with tab_kpi:
         st.info("KPI 01 no disponible para el período seleccionado.")
 
     # ── KPI 03 — Pico de demanda ─────────────────────────────────────────────
+    # La ficha pide max(activepower) SOBRE EL PERÍODO ANALIZADO, así que el valor
+    # se calcula sobre la potencia horaria cruda y no sobre el pico mensual ya
+    # agregado: con un filtro que no cubra meses enteros, el mensual devolvería un
+    # pico ocurrido fuera del período. Y un bloque puede tener varios medidores
+    # (B7 = CTIC+TAC, B8 = AA+CPA+LABS, B9 = SFA1+SFA2): su potencia es la suma en
+    # el MISMO timestamp, no la suma de sus máximos, que ocurren en horas distintas.
     st.markdown("## KPI 03 — Pico de demanda absoluto")
-    k3_f = (kpi_f[['entity_id', 'fecha', 'KPI03_pico_kw', 'fecha_pico', 'hora_pico']]
-            .dropna(subset=['KPI03_pico_kw'])
-            if 'KPI03_pico_kw' in kpi_f.columns else pd.DataFrame())
 
-    if k3_f.empty:
+    def _picos_mensuales_k3(df_crudo):
+        """Pico mensual de cada bloque, sumando sus medidores en el mismo instante."""
+        bp = (df_crudo.assign(bloque=df_crudo['entity_id'].map(_bloque_de_medidor))
+              .groupby(['bloque', 'time_index_colombia'], as_index=False)['activepower'].sum())
+        bp['kw']  = bp['activepower'] / 1000.0            # el medidor entrega W
+        bp['mes'] = (bp['time_index_colombia'].dt.to_period('M')
+                     .dt.to_timestamp(how='end').dt.normalize())
+        return bp
+
+    # `_k3_mens` es lo que se muestra (período filtrado); `_k3_base` es la serie
+    # completa del bloque, con la que se arma el umbral: si dependiera del filtro,
+    # el umbral de un mes ya cerrado cambiaría al mover las fechas y la evaluación
+    # dejaría de ser reproducible.
+    _k3_mens, _k3_base, _picos_k3, _k3_exacto = pd.DataFrame(), pd.DataFrame(), [], False
+    if raw_f is not None and not raw_f.empty and 'activepower' in raw_f.columns:
+        _bp = _picos_mensuales_k3(raw_f)
+        _k3_mens = (_bp.groupby(['bloque', 'mes'], as_index=False)['kw'].max()
+                    .rename(columns={'bloque': 'entity_id', 'mes': 'fecha',
+                                     'kw': 'KPI03_pico_kw'}))
+        _rw_todo = raw if seleccion == "Todos" else raw[
+            raw['entity_id'].map(_bloque_de_medidor) == _bloque_label(seleccion)]
+        _k3_base = (_picos_mensuales_k3(_rw_todo)
+                    .groupby(['bloque', 'mes'], as_index=False)['kw'].max()
+                    .rename(columns={'bloque': 'entity_id', 'mes': 'fecha',
+                                     'kw': 'KPI03_pico_kw'}))
+        _picos_k3 = [dict(bloque=_r['bloque'], pico=float(_r['kw']), mes=_r['mes'],
+                          fecha=_r['time_index_colombia'], hora=_r['time_index_colombia'].hour)
+                     for _, _r in _bp.loc[_bp.groupby('bloque')['kw'].idxmax()].iterrows()]
+        _k3_exacto = True
+    elif 'KPI03_pico_kw' in kpi_f.columns:
+        # Sin CSV crudo: se cae al pico mensual ya calculado en el Excel.
+        _mf = (kpi_f[['entity_id', 'fecha', 'KPI03_pico_kw', 'fecha_pico', 'hora_pico']]
+               .dropna(subset=['KPI03_pico_kw']))
+        _k3_mens = _mf[['entity_id', 'fecha', 'KPI03_pico_kw']].copy()
+        _k3_mens['entity_id'] = _k3_mens['entity_id'].map(_bloque_label)
+        _k3_base = (kpi[['entity_id', 'fecha', 'KPI03_pico_kw']]
+                    .dropna(subset=['KPI03_pico_kw']).copy())
+        _k3_base['entity_id'] = _k3_base['entity_id'].map(_bloque_label)
+        _picos_k3 = [dict(bloque=_bloque_label(_r['entity_id']),
+                          pico=float(_r['KPI03_pico_kw']), mes=_r['fecha'],
+                          fecha=_r['fecha_pico'], hora=_r['hora_pico'])
+                     for _, _r in _mf.loc[_mf.groupby('entity_id')['KPI03_pico_kw'].idxmax()].iterrows()]
+
+    if not _picos_k3:
         st.info("KPI 03 no disponible para el período seleccionado.")
     else:
-        # Serie mensual de picos de cada bloque dentro del período: es la base
-        # con la que se construye su umbral propio (mes evaluado excluido).
+        # Serie mensual de picos de cada bloque: es la base con la que se
+        # construye su umbral propio (el mes evaluado se excluye después).
         _hist_k3 = {e: g.set_index('fecha')['KPI03_pico_kw'].sort_index()
-                    for e, g in k3_f.groupby('entity_id')}
+                    for e, g in _k3_base.groupby('entity_id')}
         _cache_k3 = {}
 
-        def _umbral_k3(entity_id, fecha):
+        def _umbral_k3(bloque, fecha):
             """Objetivo, alerta y nº de meses de base de un bloque en un mes."""
-            clave = (entity_id, fecha)
+            clave = (bloque, fecha)
             if clave not in _cache_k3:
                 _cache_k3[clave] = _umbral_pico(
-                    _hist_k3.get(entity_id, pd.Series(dtype=float)), fecha)
+                    _hist_k3.get(bloque, pd.Series(dtype=float)), fecha)
             return _cache_k3[clave]
 
-        def _color_k3(entity_id, fecha, valor):
-            obj, alerta, _ = _umbral_k3(entity_id, fecha)
+        def _color_k3(bloque, fecha, valor):
+            obj, alerta, _ = _umbral_k3(bloque, fecha)
             if not np.isfinite(obj):
                 return C_GRAY                      # sin base histórica suficiente
             return _semaforo(valor, obj, alerta, mayor_es_mejor=False)
 
-        # Un renglón por bloque: su mayor pico del período, con fecha y hora.
-        _filas = []
-        for _eid, _g in k3_f.groupby('entity_id'):
-            _r = _g.loc[_g['KPI03_pico_kw'].idxmax()]
-            _obj, _alerta, _nbase = _umbral_k3(_eid, _r['fecha'])
-            _col = _color_k3(_eid, _r['fecha'], _r['KPI03_pico_kw'])
-            _filas.append(dict(
-                bloque=_bloque_label(_eid), pico=float(_r['KPI03_pico_kw']),
-                cuando=_fmt_fecha_hora(_r['fecha_pico'], _r['hora_pico']),
-                cuando_largo=_fmt_fecha_hora(_r['fecha_pico'], _r['hora_pico'], largo=True),
-                objetivo=_obj, alerta=_alerta, n_base=_nbase, color=_col,
-                estado=('sin base' if _col == C_GRAY else
-                        {'ok': 'cumple', 'warn': 'revisar',
-                         'bad': 'alerta'}[_estado_from_color(_col)]),
-            ))
-        k3 = pd.DataFrame(_filas).sort_values('pico').reset_index(drop=True)
+        for _f in _picos_k3:                       # umbral y estado de cada bloque
+            _f['objetivo'], _f['alerta'], _f['n_base'] = _umbral_k3(_f['bloque'], _f['mes'])
+            _f['color']  = _color_k3(_f['bloque'], _f['mes'], _f['pico'])
+            _f['estado'] = ('sin base' if _f['color'] == C_GRAY else
+                            {'ok': 'cumple', 'warn': 'revisar',
+                             'bad': 'alerta'}[_estado_from_color(_f['color'])])
+            _f['cuando']       = _fmt_fecha_hora(_f['fecha'], _f['hora'])
+            _f['cuando_largo'] = _fmt_fecha_hora(_f['fecha'], _f['hora'], largo=True)
+        k3 = pd.DataFrame(_picos_k3).sort_values('pico').reset_index(drop=True)
 
         # Ranking en kW: la magnitud es lo que factura. Cada bloque lleva su
         # propio umbral dibujado sobre su fila —objetivo (μ) y alerta (μ+1σ) de
-        # su historia—, porque el umbral del KPI-03 es por bloque y no admite
-        # una línea única para todo el campus.
+        # su serie mensual—, porque el umbral del KPI-03 es por bloque y no
+        # admite una línea única para todo el campus.
         serie_k3 = pd.Series(k3['pico'].values, index=k3['bloque'])
         fig_k3 = barras_horizontales(
             serie_k3, titulo='KPI 03 — Pico máximo por bloque y su umbral propio',
@@ -1487,8 +1541,7 @@ with tab_kpi:
         )
         fig_k3.data[0].text = None                  # la etiqueta va como anotación
 
-        # Marcas de umbral por fila: mismo código de color que el resto del
-        # tablero (verde objetivo, rojo alerta), acotadas a su bloque.
+        # Marcas de umbral por fila, con el código de color del resto del tablero.
         for _i, _f in k3.iterrows():
             for _v, _c in ((_f['objetivo'], C_TEAL), (_f['alerta'], C_RED)):
                 if not np.isfinite(_v):
@@ -1509,7 +1562,6 @@ with tab_kpi:
                       f"{' · sin base' if _f['estado'] == 'sin base' else ''}</span>"),
                 font=dict(size=11.5, color=INK),
             )
-        # Leyenda de las marcas (el gráfico base no lleva leyenda propia).
         for _c, _nom in ((C_TEAL, 'Objetivo (μ)'), (C_RED, 'Alerta (μ+1σ)')):
             fig_k3.add_trace(go.Scatter(
                 x=[None], y=[None], mode='lines', name=_nom,
@@ -1524,45 +1576,51 @@ with tab_kpi:
         _chart(fig_k3, use_container_width=True)
 
         _top = k3.iloc[-1]
-        _obj_top, _alerta_top, _ = _top['objetivo'], _top['alerta'], None
         m1, m2, m3 = st.columns(3)
-        m1.metric("Pico del campus", f"{_top['pico']:,.1f} kW",
-                  help="Mayor potencia instantánea registrada en el período.")
+        m1.metric("Mayor pico de un bloque", f"{_top['pico']:,.1f} kW",
+                  help="D_pico = máximo(activepower) del período, por bloque.")
         m2.metric("Bloque del pico", _top['bloque'],
                   delta=_top['cuando_largo'], delta_color="off",
-                  help="Bloque, fecha y hora de ocurrencia del pico del campus.")
-        if np.isfinite(_obj_top):
-            m3.metric("Exceso sobre su objetivo", f"{_top['pico'] - _obj_top:+,.1f} kW",
-                      delta=f"objetivo {_obj_top:,.1f} kW", delta_color="off",
-                      help="Distancia hasta la media histórica de picos del bloque.")
+                  help="Bloque, fecha y hora de ocurrencia exigidos por la ficha.")
+        if np.isfinite(_top['objetivo']):
+            m3.metric("Exceso sobre su objetivo", f"{_top['pico'] - _top['objetivo']:+,.1f} kW",
+                      delta=f"objetivo {_top['objetivo']:,.1f} kW", delta_color="off",
+                      help="Distancia hasta la media de picos mensuales del bloque.")
         else:
             m3.metric("Exceso sobre su objetivo", "—", help="Sin base histórica suficiente.")
 
-        _n_alerta = int((k3['estado'] == 'alerta').sum())
+        _n_alerta  = int((k3['estado'] == 'alerta').sum())
         _n_sinbase = int((k3['estado'] == 'sin base').sum())
-        _txt = (f"El pico del campus fue **{_top['pico']:,.1f} kW** en **{_top['bloque']}**, "
-                f"el {_top['cuando_largo']}. Ese valor —y no el consumo total— es el que "
-                f"fija el cargo por demanda de la factura: bajarlo se traduce en ahorro "
-                f"directo.")
+        _txt = (f"El mayor pico del período fue **{_top['pico']:,.1f} kW** en "
+                f"**{_top['bloque']}**, el {_top['cuando_largo']}. Ese valor —y no el "
+                f"consumo total— es el que fija el cargo por demanda de la factura: "
+                f"bajarlo se traduce en ahorro directo.")
         if _n_alerta:
             st.warning(_txt + f" **{_n_alerta} bloque(s)** superan su umbral de alerta.")
         else:
             st.info(_txt)
 
-        # Tira de estado mensual: aquí sí se ve el umbral de cada bloque mes a mes.
+        # Tira de estado mensual: el umbral de cada bloque, mes a mes.
         _chart(tira_estado(
-            k3_f, 'KPI03_pico_kw', 'KPI 03 — Pico de demanda',
-            None,
+            _k3_mens, 'KPI03_pico_kw', 'KPI 03 — Pico de demanda', None,
             'verde ≤ μ\nnaranja ≤ μ+1σ\nrojo > μ+1σ\ngris sin base',
             estado_fn=_color_k3, fmt='{:,.1f} kW',
         ), use_container_width=True)
 
         st.caption(
-            "Umbral propio KPI-03: objetivo = μ y alerta = μ+1σ de la serie mensual de "
-            "picos de cada bloque, calculada con los demás meses del período analizado "
-            "(máx. 12) — el mes que se juzga no entra en su propio umbral. Con menos de "
-            f"4 meses de base no se emite semáforo ({_n_sinbase} bloque(s) hoy). "
-            "Fuente: activepower horaria, medidores Landis (etsmartmeter)."
+            ("D_pico = máximo(activepower) sobre el período exacto seleccionado, por "
+             "bloque, sumando en el mismo instante los medidores del bloque. "
+             if _k3_exacto else
+             "D_pico tomado del pico mensual precalculado (clean_etsmartmeter.csv no "
+             "disponible): con un filtro que no cubra meses enteros el pico puede "
+             "haber ocurrido fuera del período. ") +
+            "activepower es la **media horaria** del medidor Landis, así que el pico "
+            "instantáneo real es algo mayor que el reportado. "
+            "Umbral propio: objetivo = μ y alerta = μ+1σ de la serie mensual de picos "
+            "del bloque, sobre los demás meses con dato (máx. 12) — el mes que se juzga "
+            "no entra en su propio umbral, y la base no depende del filtro de fechas para "
+            f"que la evaluación sea reproducible; con menos de 4 meses de base no se emite "
+            f"semáforo ({_n_sinbase} bloque(s) hoy). ODS 7 y 9."
         )
 
     # ── KPI 05 — Emisiones CO₂ acumuladas ────────────────────────────────────
