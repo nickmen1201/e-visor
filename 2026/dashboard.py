@@ -397,6 +397,13 @@ def cargar_datos():
         _b9k['bloque']    = 9
         _b9k['entity_id'] = 'SmartMeter_SM_B9'
         _b9k['area_m2']   = AREAS_BLOQUE[9]
+        # El pico de B9 suma los dos submedidores; se registra la fecha/hora del
+        # dominante de cada mes (el que aporta el mayor pico).
+        _dom = (kpi[_b9_kpi].sort_values('KPI03_pico_kw')
+                .drop_duplicates(subset=['fecha'], keep='last')
+                [['fecha', 'fecha_pico', 'hora_pico']])
+        _b9k = (_b9k.drop(columns=['fecha_pico', 'hora_pico'], errors='ignore')
+                    .merge(_dom, on='fecha', how='left'))
         if 'e_wh' in _b9k.columns:
             _b9k['KPI01_kwh_m2'] = _b9k['e_wh'] / (_b9k['area_m2'] * 1000)
         kpi = pd.concat([kpi[~_b9_kpi], _b9k], ignore_index=True)
@@ -441,6 +448,41 @@ def _semaforo(v, obj, alert, mayor_es_mejor=True):
         return C_TEAL if v >= obj else (C_AMBER if v >= alert else C_RED)
     else:
         return C_TEAL if v <= obj else (C_AMBER if v <= alert else C_RED)
+
+
+_MESES_ABR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
+              'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+
+def _fmt_fecha_hora(fecha, hora, largo=False):
+    """'20 may · 14:00' — fecha y hora de ocurrencia (KPI-03 las exige)."""
+    if pd.isna(fecha):
+        return 's/d'
+    f = pd.Timestamp(fecha)
+    txt = f'{f.day} {_MESES_ABR[f.month - 1]}' + (f' {f.year}' if largo else '')
+    return txt if pd.isna(hora) else f'{txt} · {int(hora):02d}:00'
+
+
+# KPI-03 — protocolo de umbral propio (media ± 1σ) declarado en
+# ecocampus_kpis_indicadores.json → kpis[KPI-03].umbral
+UMBRAL_PICO_VENTANA   = 12   # meses anteriores que forman la base
+UMBRAL_PICO_MIN_MESES = 4    # con menos base no se emite semáforo
+
+
+def _umbral_pico(hist, fecha_eval):
+    """Objetivo y alerta de KPI-03 para un bloque, y tamaño de la base.
+
+    `hist` es la serie de picos mensuales del bloque indexada por fecha. La base
+    son los ≤12 meses ANTERIORES al mes evaluado: el mes que se juzga nunca entra
+    en su propio umbral (si entrara, el máximo del período siempre quedaría por
+    encima de su propia media y el semáforo no diría nada). Con menos de
+    4 meses de base se devuelve (nan, nan, n) → estado «sin base».
+    """
+    base = hist[hist.index < fecha_eval].dropna().iloc[-UMBRAL_PICO_VENTANA:]
+    if len(base) < UMBRAL_PICO_MIN_MESES:
+        return np.nan, np.nan, len(base)
+    mu = float(base.mean())
+    return mu, mu + float(base.std(ddof=1)), len(base)
 
 
 def _estado_from_color(c):
@@ -972,8 +1014,12 @@ else:
 
 # Pico de demanda
 if pico_max is not None:
+    # KPI-03 exige registrar bloque, fecha y hora del pico junto al valor.
+    _r_pk    = kpi_f.loc[kpi_f['KPI03_pico_kw'].idxmax()]
+    _foot_pk = (f"{_bloque_label(_r_pk['entity_id'])} · "
+                f"{_fmt_fecha_hora(_r_pk.get('fecha_pico'), _r_pk.get('hora_pico'))}")
     _cards.append(_kpi_card('Pico de demanda', f'{pico_max:.1f}', 'kW',
-                            spark=_sparkline_svg(_sp_pk), foot='máx. del período'))
+                            spark=_sparkline_svg(_sp_pk), foot=_foot_pk))
 else:
     _cards.append(_kpi_card('Pico de demanda', '—'))
 
@@ -1355,37 +1401,109 @@ with tab_kpi:
         st.info("KPI 01 no disponible para el período seleccionado.")
 
     # ── KPI 03 — Pico de demanda ─────────────────────────────────────────────
+    # Bullet chart: barra = pico del período; marcas verticales = objetivo (μ) y
+    # alerta (μ+1σ) históricos; columna derecha = valor, fecha/hora y estado.
     st.markdown("## KPI 03 — Pico de demanda absoluto")
-    agg = kpi_f.groupby('entity_id').agg(
-        pico=('KPI03_pico_kw', 'max'),
-        media_pico=('KPI03_pico_kw', 'mean'),
-        sigma_pico=('KPI03_pico_kw', 'std'),
-    ).copy()
-    agg['alerta']   = agg['media_pico'] + agg['sigma_pico'].fillna(0)
-    agg['objetivo'] = agg['media_pico'] * 0.93
-    agg = agg.sort_values('pico', ascending=True)
-    agg.index = [_bloque_label(e) for e in agg.index]
+    k3_f = (kpi_f[['entity_id', 'fecha', 'KPI03_pico_kw', 'fecha_pico', 'hora_pico']]
+            .dropna(subset=['KPI03_pico_kw'])
+            if 'KPI03_pico_kw' in kpi_f.columns else pd.DataFrame())
 
-    fig_k3 = go.Figure()
-    fig_k3.add_trace(go.Bar(
-        x=agg['pico'], y=agg.index,
-        orientation='h', name='Pico máx.',
-        marker_color=[_semaforo(p, o, a, mayor_es_mejor=False)
-                      for p, a, o in zip(agg['pico'], agg['alerta'], agg['objetivo'])],
-        text=[f'{p:.1f} kW' for p in agg['pico']], textposition='outside',
-        hovertemplate='%{y}: %{x:.1f} kW<extra>Pico</extra>',
-    ))
-    fig_k3.add_trace(go.Scatter(
-        x=agg['alerta'], y=agg.index, mode='markers',
-        name='Alerta (μ+1σ)', marker=dict(symbol='line-ew', color=C_RED, size=10, line=dict(width=2, color=C_RED)),
-    ))
-    fig_k3.add_trace(go.Scatter(
-        x=agg['objetivo'], y=agg.index, mode='markers',
-        name='Objetivo (μ−7%)', marker=dict(symbol='line-ew', color=C_TEAL, size=10, line=dict(width=2, color=C_TEAL)),
-    ))
-    fig_k3.update_layout(title=dict(text='KPI 03 — Pico de demanda por bloque', font=dict(size=13), x=0),
-                         xaxis_title='kW', barmode='overlay')
-    _chart(_layout_base(fig_k3, h=max(260, 36 * len(agg) + 100)), use_container_width=True)
+    if k3_f.empty:
+        st.info("KPI 03 no disponible para el período seleccionado.")
+    else:
+        # Un renglón por bloque: el mes de mayor pico dentro del período, con su
+        # fecha/hora de ocurrencia y el umbral construido con su historia previa.
+        _filas = []
+        for _eid, _g in k3_f.groupby('entity_id'):
+            _r    = _g.loc[_g['KPI03_pico_kw'].idxmax()]
+            _hist = (kpi[kpi['entity_id'] == _eid]          # historia completa,
+                     .dropna(subset=['KPI03_pico_kw'])      # no la del filtro
+                     .set_index('fecha')['KPI03_pico_kw'].sort_index())
+            _obj, _alerta, _nbase = _umbral_pico(_hist, _r['fecha'])
+            _filas.append(dict(bloque=_bloque_label(_eid),
+                               pico=float(_r['KPI03_pico_kw']),
+                               fecha=_r['fecha_pico'], hora=_r['hora_pico'],
+                               objetivo=_obj, alerta=_alerta, n_base=_nbase))
+        agg = (pd.DataFrame(_filas)
+               .sort_values('pico', ascending=True)   # el mayor arriba en barras h.
+               .reset_index(drop=True))
+
+        agg['color'] = [C_GRAY if not np.isfinite(o)
+                        else _semaforo(p, o, a, mayor_es_mejor=False)
+                        for p, o, a in zip(agg['pico'], agg['objetivo'], agg['alerta'])]
+        agg['estado'] = ['sin base' if c == C_GRAY else
+                         {'ok': 'cumple', 'warn': 'revisar', 'bad': 'alerta'}[_estado_from_color(c)]
+                         for c in agg['color']]
+        etq_k3 = agg['bloque'].tolist()
+
+        fig_k3 = go.Figure()
+        fig_k3.add_trace(go.Bar(
+            x=agg['pico'], y=etq_k3, orientation='h', name='Pico máx.',
+            width=0.55, marker=dict(color=agg['color'].tolist(), line_width=0),
+            customdata=[[_fmt_fecha_hora(f, h),
+                         '—' if not np.isfinite(o) else f'{o:.1f} kW',
+                         '—' if not np.isfinite(a) else f'{a:.1f} kW', e, int(n)]
+                        for f, h, o, a, e, n in zip(agg['fecha'], agg['hora'], agg['objetivo'],
+                                                    agg['alerta'], agg['estado'], agg['n_base'])],
+            hovertemplate=('<b>%{y}</b> · %{x:.1f} kW<br>Ocurrió: %{customdata[0]}<br>'
+                           'Objetivo (μ): %{customdata[1]}<br>Alerta (μ+1σ): %{customdata[2]}<br>'
+                           'Estado: %{customdata[3]} · base %{customdata[4]} meses<extra></extra>'),
+        ))
+        # Marcas verticales (no horizontales: sobre una barra horizontal no se
+        # distinguen) con halo blanco para que se lean encima del relleno.
+        for _x, _col, _nom in ((agg['objetivo'], C_TEAL, 'Objetivo (μ hist.)'),
+                               (agg['alerta'],   C_RED,  'Alerta (μ+1σ hist.)')):
+            fig_k3.add_trace(go.Scatter(
+                x=_x, y=etq_k3, mode='markers', showlegend=False, hoverinfo='skip',
+                marker=dict(symbol='line-ns', size=30, line=dict(width=6, color=SURFACE)),
+            ))
+            fig_k3.add_trace(go.Scatter(
+                x=_x, y=etq_k3, mode='markers', name=_nom,
+                marker=dict(symbol='line-ns', size=26, color=_col,
+                            line=dict(width=2.6, color=_col)),
+                hovertemplate='%{y}: %{x:.1f} kW<extra>' + _nom + '</extra>',
+            ))
+        # Valores en un canal propio a la derecha del área de trazado: así nunca
+        # chocan con las marcas de umbral ni se recortan en el borde.
+        for _y, _p, _f, _h, _e in zip(etq_k3, agg['pico'], agg['fecha'],
+                                      agg['hora'], agg['estado']):
+            fig_k3.add_annotation(
+                xref='paper', x=1.015, y=_y, xanchor='left', align='left',
+                showarrow=False, font=dict(size=12, color=INK),
+                text=(f'<b>{_p:,.1f} kW</b><br>'
+                      f'<span style="font-size:10.5px;color:{MUTED}">'
+                      f'{_fmt_fecha_hora(_f, _h)} · {_e}</span>'),
+            )
+
+        _xmax_k3 = float(np.nanmax([agg['pico'].max(), agg['alerta'].max()]))
+        _layout_base(fig_k3, h=max(300, 42 * len(agg) + 120))
+        fig_k3.update_layout(
+            barmode='overlay',
+            margin=dict(t=44, b=48, l=68, r=196),   # r: canal de valores
+            legend=dict(orientation='h', y=1.02, yanchor='bottom',
+                        x=0, xanchor='left'),       # izquierda: no tapa la modebar
+        )
+        fig_k3.update_xaxes(range=[0, _xmax_k3 * 1.06], title='kW')
+        _chart(fig_k3, use_container_width=True)
+
+        _top_k3  = agg.iloc[-1]                     # orden ascendente → el mayor
+        _n_alert = int((agg['estado'] == 'alerta').sum())
+        _n_base  = int((agg['estado'] == 'sin base').sum())
+        st.info(
+            f"Pico del campus en el período: **{_top_k3['pico']:,.1f} kW** en "
+            f"**{_top_k3['bloque']}**, el "
+            f"{_fmt_fecha_hora(_top_k3['fecha'], _top_k3['hora'], largo=True)}. "
+            f"Ese valor es el que fija el cargo por demanda de la factura. "
+            + (f"{_n_alert} bloque(s) superan su umbral de alerta. " if _n_alert else "")
+            + (f"{_n_base} sin base histórica suficiente." if _n_base else "")
+        )
+        st.caption(
+            "Umbral propio KPI-03: objetivo = μ y alerta = μ+1σ de la serie mensual de "
+            "picos del bloque, sobre los 12 meses anteriores al mes del pico — el mes "
+            "evaluado no entra en su propio umbral. Con menos de 4 meses de base no se "
+            "emite semáforo (gris, «sin base»). Fuente: activepower horaria, medidores "
+            "Landis (etsmartmeter)."
+        )
 
     # ── KPI 05 — Emisiones CO₂ acumuladas ────────────────────────────────────
     st.markdown("## KPI 05 — Emisiones CO₂ acumuladas vs. meta")
