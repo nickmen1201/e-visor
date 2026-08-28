@@ -463,22 +463,26 @@ def _fmt_fecha_hora(fecha, hora, largo=False):
     return txt if pd.isna(hora) else f'{txt} · {int(hora):02d}:00'
 
 
-# KPI-03 — protocolo de umbral propio (media ± 1σ) declarado en
-# ecocampus_kpis_indicadores.json → kpis[KPI-03].umbral
-UMBRAL_PICO_VENTANA   = 12   # meses anteriores que forman la base
+# KPI-03 — umbral propio (media ± 1σ) sobre la serie mensual de picos de cada
+# bloque, según ecocampus_kpis_indicadores.json → kpis[KPI-03].umbral.
+UMBRAL_PICO_VENTANA   = 12   # meses de base como máximo (los más cercanos)
 UMBRAL_PICO_MIN_MESES = 4    # con menos base no se emite semáforo
 
 
-def _umbral_pico(hist, fecha_eval):
+def _umbral_pico(serie, fecha_eval):
     """Objetivo y alerta de KPI-03 para un bloque, y tamaño de la base.
 
-    `hist` es la serie de picos mensuales del bloque indexada por fecha. La base
-    son los ≤12 meses ANTERIORES al mes evaluado: el mes que se juzga nunca entra
-    en su propio umbral (si entrara, el máximo del período siempre quedaría por
-    encima de su propia media y el semáforo no diría nada). Con menos de
-    4 meses de base se devuelve (nan, nan, n) → estado «sin base».
+    `serie` son los picos mensuales del bloque en el período analizado. La base
+    son los DEMÁS meses de ese período: el mes que se juzga no entra en su propio
+    umbral, porque si entrara el máximo quedaría siempre por encima de su propia
+    media y el semáforo no diría nada. Se toman como mucho los 12 meses más
+    cercanos al evaluado. Con menos de 4 meses de base se devuelve (nan, nan, n)
+    → estado «sin base».
     """
-    base = hist[hist.index < fecha_eval].dropna().iloc[-UMBRAL_PICO_VENTANA:]
+    base = serie.drop(index=fecha_eval, errors='ignore').dropna()
+    if len(base) > UMBRAL_PICO_VENTANA:
+        cercanos = np.argsort(np.abs((base.index - fecha_eval).values))
+        base = base.iloc[sorted(cercanos[:UMBRAL_PICO_VENTANA])]
     if len(base) < UMBRAL_PICO_MIN_MESES:
         return np.nan, np.nan, len(base)
     mu = float(base.mean())
@@ -1426,10 +1430,10 @@ with tab_kpi:
     if k3_f.empty:
         st.info("KPI 03 no disponible para el período seleccionado.")
     else:
-        # Historia mensual completa por bloque: es la base del umbral propio y no
-        # depende del filtro de fechas (el umbral mira hacia atrás, no al período).
+        # Serie mensual de picos de cada bloque dentro del período: es la base
+        # con la que se construye su umbral propio (mes evaluado excluido).
         _hist_k3 = {e: g.set_index('fecha')['KPI03_pico_kw'].sort_index()
-                    for e, g in kpi.dropna(subset=['KPI03_pico_kw']).groupby('entity_id')}
+                    for e, g in k3_f.groupby('entity_id')}
         _cache_k3 = {}
 
         def _umbral_k3(entity_id, fecha):
@@ -1463,16 +1467,16 @@ with tab_kpi:
             ))
         k3 = pd.DataFrame(_filas).sort_values('pico').reset_index(drop=True)
 
-        # Ranking en kW — la magnitud es lo que factura. El umbral es propio de
-        # cada bloque, así que no cabe como línea única: va en el color, en el
-        # hover y en la tira de estado de abajo.
+        # Ranking en kW: la magnitud es lo que factura. Cada bloque lleva su
+        # propio umbral dibujado sobre su fila —objetivo (μ) y alerta (μ+1σ) de
+        # su historia—, porque el umbral del KPI-03 es por bloque y no admite
+        # una línea única para todo el campus.
         serie_k3 = pd.Series(k3['pico'].values, index=k3['bloque'])
         fig_k3 = barras_horizontales(
-            serie_k3, titulo='KPI 03 — Pico máximo por bloque',
+            serie_k3, titulo='KPI 03 — Pico máximo por bloque y su umbral propio',
             xlabel=f'kW · {periodo_dias} días',
             colores=k3['color'].tolist(),
-            fmt='{:,.1f} kW',
-            margin_r=150,
+            margin_r=180,
             customdata=[[c, ('—' if not np.isfinite(o) else f'{o:,.1f} kW'),
                          ('—' if not np.isfinite(a) else f'{a:,.1f} kW'), e, int(n)]
                         for c, o, a, e, n in zip(k3['cuando'], k3['objetivo'],
@@ -1480,6 +1484,42 @@ with tab_kpi:
             hover=('<b>%{y}</b> — %{x:,.1f} kW<br>Ocurrió: %{customdata[0]}<br>'
                    'Objetivo (μ): %{customdata[1]} · Alerta (μ+1σ): %{customdata[2]}<br>'
                    'Estado: %{customdata[3]} · base: %{customdata[4]} meses<extra></extra>'),
+        )
+        fig_k3.data[0].text = None                  # la etiqueta va como anotación
+
+        # Marcas de umbral por fila: mismo código de color que el resto del
+        # tablero (verde objetivo, rojo alerta), acotadas a su bloque.
+        for _i, _f in k3.iterrows():
+            for _v, _c in ((_f['objetivo'], C_TEAL), (_f['alerta'], C_RED)):
+                if not np.isfinite(_v):
+                    continue
+                fig_k3.add_shape(type='line', xref='x', yref='y',
+                                 x0=_v, x1=_v, y0=_i - 0.34, y1=_i + 0.34,
+                                 line=dict(color=_c, width=2.4), layer='above')
+        # Valor, fecha y hora al final de la barra (o de la marca, si sobresale),
+        # de modo que la etiqueta nunca se monte sobre el umbral.
+        _xmax_k3 = float(np.nanmax([k3['pico'].max(), k3['alerta'].max()]))
+        for _i, _f in k3.iterrows():
+            _x = max(_f['pico'], _f['alerta'] if np.isfinite(_f['alerta']) else 0)
+            fig_k3.add_annotation(
+                x=_x + _xmax_k3 * 0.012, y=_i, xref='x', yref='y',
+                xanchor='left', yanchor='middle', showarrow=False, align='left',
+                text=(f"<b>{_f['pico']:,.1f} kW</b>"
+                      f"<span style=\"color:{MUTED}\"> · {_f['cuando']}"
+                      f"{' · sin base' if _f['estado'] == 'sin base' else ''}</span>"),
+                font=dict(size=11.5, color=INK),
+            )
+        # Leyenda de las marcas (el gráfico base no lleva leyenda propia).
+        for _c, _nom in ((C_TEAL, 'Objetivo (μ)'), (C_RED, 'Alerta (μ+1σ)')):
+            fig_k3.add_trace(go.Scatter(
+                x=[None], y=[None], mode='lines', name=_nom,
+                line=dict(color=_c, width=2.4),
+            ))
+        fig_k3.update_xaxes(range=[0, _xmax_k3 * 1.03])
+        fig_k3.update_layout(
+            showlegend=True, margin=dict(t=64, b=44, l=100, r=180),
+            legend=dict(orientation='h', yanchor='bottom', y=1.01,
+                        xanchor='right', x=1, font=dict(size=11, color=INK2)),
         )
         _chart(fig_k3, use_container_width=True)
 
@@ -1519,10 +1559,10 @@ with tab_kpi:
 
         st.caption(
             "Umbral propio KPI-03: objetivo = μ y alerta = μ+1σ de la serie mensual de "
-            "picos de cada bloque, sobre los 12 meses anteriores al mes evaluado — el mes "
-            "que se juzga no entra en su propio umbral. Con menos de 4 meses de base no se "
-            f"emite semáforo ({_n_sinbase} bloque(s) hoy). Fuente: activepower horaria, "
-            "medidores Landis (etsmartmeter)."
+            "picos de cada bloque, calculada con los demás meses del período analizado "
+            "(máx. 12) — el mes que se juzga no entra en su propio umbral. Con menos de "
+            f"4 meses de base no se emite semáforo ({_n_sinbase} bloque(s) hoy). "
+            "Fuente: activepower horaria, medidores Landis (etsmartmeter)."
         )
 
     # ── KPI 05 — Emisiones CO₂ acumuladas ────────────────────────────────────
