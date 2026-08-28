@@ -1043,10 +1043,11 @@ else:
 # Load Factor
 if lf_medio is not None:
     _e = _estado_from_color(_semaforo(lf_medio, 0.65, 0.50))
-    _cards.append(_kpi_card('Load Factor medio', f'{lf_medio:.2f}', '',
-                            estado=_e, spark=_sparkline_svg(_sp_lf), foot='obj ≥ 0.65'))
+    _cards.append(_kpi_card('LF medio diario', f'{lf_medio:.2f}', '',
+                            estado=_e, spark=_sparkline_svg(_sp_lf),
+                            foot='media de LF diarios · obj ≥ 0.65'))
 else:
-    _cards.append(_kpi_card('Load Factor medio', '—'))
+    _cards.append(_kpi_card('LF medio diario', '—'))
 
 # Pico de demanda
 if pico_max is not None:
@@ -1098,16 +1099,24 @@ with tab_ind:
         _comp = None
 
     # ── LF — Load Factor ────────────────────────────────────────────────────
-    st.markdown("## LF — Factor de carga")
+    st.markdown("## LF — Factor de carga (diario)")
     fig_lf_bar = barras_horizontales(
         ind_f.assign(bloque=ind_f['entity_id'].map(_bloque_label))
              .groupby('bloque')['LF'].mean().sort_values(),
-        titulo='LF medio por bloque',
-        xlabel='Factor de carga (0–1)',
+        titulo='IND-01 — Media de los LF diarios por bloque',
+        xlabel='Factor de carga diario (0–1)',
         color_fn=lambda v: _semaforo(v, 0.65, 0.50),
         ref_lines=[(0.65, C_TEAL, 'objetivo 0.65')],
     )
     _chart(fig_lf_bar, use_container_width=True)
+    st.caption(
+        "IND-01 usa la misma fórmula que el KPI 08 —LF = P̄ / P_máx— pero sobre una "
+        "ventana distinta: aquí cada **día** tiene su propio máximo y el gráfico "
+        "promedia esos LF diarios; el KPI 08 usa el máximo del **mes**. Como el "
+        "máximo mensual es mayor o igual que el de cualquier día, el LF diario "
+        "siempre da más alto que el mensual: los dos números no son comparables "
+        "entre sí y ninguno es el LF del período completo."
+    )
     _chart(serie_diaria(ind_f, 'LF', 'LF (adimensional)'), use_container_width=True)
 
     # ── PAR — Peak-to-Average Ratio ─────────────────────────────────────────
@@ -1668,7 +1677,7 @@ with tab_kpi:
         )
 
     # ── KPI 08 — Load Factor ─────────────────────────────────────────────────
-    st.markdown("## KPI 08 — Load Factor")
+    st.markdown("## KPI 08 — Load Factor (mensual)")
     lf_vals            = kpi_f['KPI08_LF'].dropna()
     mu_lf              = float(lf_vals.mean()) if len(lf_vals) > 0 else 0.65
     sigma_lf           = float(lf_vals.std())  if len(lf_vals) > 1 else 0.0
@@ -1679,13 +1688,19 @@ with tab_kpi:
     lf_medio_k8.index = [_bloque_label(e) for e in lf_medio_k8.index]
 
     _chart(barras_horizontales(
-        lf_medio_k8, titulo='KPI 08 — LF medio por bloque', xlabel='LF',
+        lf_medio_k8, titulo='KPI 08 — Media de los LF mensuales por bloque',
+        xlabel='Factor de carga mensual (0–1)',
         color_fn=lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
         ref_lines=[
             (umbral_objetivo_lf, C_TEAL, f'objetivo {umbral_objetivo_lf:.3f}'),
             (umbral_alerta_lf,   C_RED,  f'alerta {umbral_alerta_lf:.3f}'),
         ],
     ), use_container_width=True)
+    st.caption(
+        "LF mensual = P̄ del mes / P_máx del mes. No coincide con el IND-01 de la "
+        "pestaña de indicadores, que promedia LF diarios: misma fórmula, ventana "
+        "distinta (ver nota allí)."
+    )
     _chart(tira_estado(
         kpi_f, 'KPI08_LF', 'KPI 08 — Load Factor',
         lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),

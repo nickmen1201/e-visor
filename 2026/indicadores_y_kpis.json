@@ -1,0 +1,370 @@
+{
+  "documento": {
+    "titulo": "Indicadores y KPIs",
+    "proyecto": "e-Visor — Ecocampus UPB, Sede Medellín",
+    "autor": "Nicolás Meneses Marín",
+    "docente_lider": "Ana Isabel Oviedo Carrascal",
+    "anio": 2026
+  },
+  "indicadores": [
+    {
+      "id": "LF",
+      "nombre": "Load Factor (Factor de carga)",
+      "formula": "LF = promedio(activepower) / máximo(activepower)",
+      "explicacion": "Mide la uniformidad de la curva de carga. Valores cercanos a 1 indican estabilidad y buena utilización.",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "PAR",
+      "nombre": "Peak to Average Ratio",
+      "formula": "PAR = máximo(activepower) / promedio(activepower)",
+      "explicacion": "Indica cuántas veces la demanda pico supera la demanda promedio.",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "f1",
+      "nombre": "Uniformidad de franja horaria (operacional)",
+      "formula": "f₁ = promedio(activepower_operación) / máximo(activepower_operación)",
+      "explicacion": "Uniformidad del consumo en la franja operacional (06:00–21:59).",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "f2",
+      "nombre": "Coeficiente de variación de carga (CV)",
+      "formula": "f₂ = desviación_estándar(activepower_operación) / promedio(activepower_operación)",
+      "explicacion": "Mide la variabilidad relativa de la demanda dentro de la franja operacional. Valores altos indican una curva de carga errática con cambios bruscos frecuentes; valores bajos indican consumo estable.",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "f3",
+      "nombre": "Relación mínimo–promedio",
+      "formula": "f₃ = mínimo(activepower_operación) / promedio(activepower_operación)",
+      "explicacion": "Estabilidad relativa del consumo respecto al promedio.",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "f4",
+      "nombre": "Factor de carga no operacional",
+      "formula": "f₄ = promedio(activepower_no_operación) / promedio(activepower_operación); no operación = 22:00–05:59, operación = 06:00–21:59",
+      "explicacion": "Razón entre la potencia promedio en franja no operacional y la potencia promedio en franja operacional. Revela consumo fuera de horario operacional.",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "CO2",
+      "nombre": "Emisiones de CO₂",
+      "formula": "CO₂ [tCO₂e] = 9,7018×10⁻⁸ × suma(activeenergyimportday [Wh])",
+      "explicacion": "Conversión del consumo eléctrico a toneladas de CO₂ equivalente mediante el factor de emisión de la red colombiana.",
+      "variables": [
+        "activeenergyimport"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "IGS",
+      "nombre": "Yield Factor (Rendimiento específico FV)",
+      "formula": "IGS = suma(energyproducedtoday) / P_instalada",
+      "explicacion": "Energía producida normalizada por la potencia pico instalada. Permite comparar plantas de distinto tamaño.",
+      "variables": [
+        "energyproducedtoday"
+      ],
+      "fuente": "Fronius/Enphase + Weather"
+    },
+    {
+      "id": "TCP",
+      "nombre": "Temperatura crítica de panel",
+      "formula": "ΔT = promedio(paneltemperature) − promedio(ambienttemperature)",
+      "explicacion": "Sobrecalentamiento de paneles. Se sugiere añadir su efecto calculado sobre la reducción de eficiencia (ej.: pérdida del 0,4%/°C sobre TC) para hacerlo accionable y educativo.",
+      "variables": [
+        "paneltemperature",
+        "ambienttemperature"
+      ],
+      "fuente": "Sensor Fronius"
+    },
+    {
+      "id": "EB",
+      "nombre": "Eficiencia de batería",
+      "formula": "EB = suma(energyfrombattery) / suma(energytobattery)",
+      "explicacion": "Eficiencia del ciclo carga–descarga.",
+      "variables": [
+        "energyfrombattery",
+        "energytobattery"
+      ],
+      "fuente": "Inversor_Baterías"
+    },
+    {
+      "id": "AHORRO",
+      "nombre": "Ahorro de energía (consumo)",
+      "formula": "Ahorro = 1 − (Consumo periodo actual / Consumo periodo base); Ahorro (%) = Ahorro × 100",
+      "explicacion": "Permite cuantificar cuánto se redujo el consumo energético respecto a un período base. Busca alimentar el KPI 04 (Ahorro energético), que da dimensión al estar normalizado.",
+      "variables": [
+        "activeenergyimport"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "DBV",
+      "nombre": "Desbalance de tensión (%)",
+      "formula": "desbalance = (máx(|v₁−v̄|, |v₂−v̄|, |v₃−v̄|) / v̄) × 100; v̄ = (v₁ + v₂ + v₃) / 3",
+      "explicacion": "Mide el desvío porcentual entre cada fase y la tensión promedio. Valores altos indican mala calidad de energía, pérdidas y riesgo para cargas trifásicas.",
+      "variables": [
+        "v1",
+        "v2",
+        "v3"
+      ],
+      "fuente": "Medidores Landis"
+    },
+    {
+      "id": "FD",
+      "nombre": "Factor de Diversidad (FD)",
+      "formula": "FD = Σ máximo(activepower_i) / máximo(Σ activepower_i); i = cada uno de los 16 medidores; el denominador es el máximo de la suma simultánea de todos los medidores en cada timestamp",
+      "explicacion": "Permite saber si los picos de demanda de los distintos medidores se acumulan sobre la sede al mismo tiempo o se distribuyen a lo largo del día. Valores mayores a 1 indican que los picos de cada medidor ocurren en momentos distintos, por lo que la sede nunca experimenta todos sus picos al mismo tiempo. FD = 1 sería el caso extremo en que todos los medidores alcanzan su máximo exactamente al mismo tiempo.",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis"
+    }
+  ],
+  "kpis": [
+    {
+      "id": "KPI 01",
+      "nombre": "Consumo por metro cuadrado",
+      "grupo": "Eficiencia energética",
+      "tipo_umbral": "A definir",
+      "umbral": "Se calcula con el promedio histórico del primer año de medición. Referencia orientadora: 124.4 kWh/m²·año (UPME Guía PGEE, edificios educativos).",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses).",
+      "rol_en_sistema": "Mide cuánta energía eléctrica consume cada metro cuadrado del campus por mes. Es el indicador de eficiencia más universal para edificios y permite comparar bloques entre sí y con referencias nacionales.",
+      "unidad": "kWh/m²",
+      "formula": "IE_área = Σ(activeenergyimportday ÷ [constante de conversión de unidad]) / Área_bloque",
+      "variables_fuentes": "activeenergyimportday: energía activa consumida en el día [Wh], ÷1000 → kWh (Medidores Landis / etsmartmeter / CSV Landis). Área_bloque: área construida del bloque [m²], parámetro fijo institucional.",
+      "ods": [
+        7,
+        9
+      ],
+      "objetivo_evisor": "Reducción consumo por m²",
+      "eje_esg": "Regeneración y resiliencia",
+      "grupo_interes": "Líderes institucionales",
+      "notas": ""
+    },
+    {
+      "id": "KPI 02",
+      "nombre": "Intensidad energética por usuario",
+      "grupo": "Eficiencia energética",
+      "tipo_umbral": "A definir",
+      "umbral": "Se calcula con el promedio del primer año. Requiere definir previamente qué es un 'usuario activo'.",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo. La definición de 'usuario activo' debe validarse institucionalmente antes del primer cálculo.",
+      "rol_en_sistema": "Conecta el consumo energético con la actividad académica del campus. Permite detectar si el consumo crece por más ocupación o por sistemas ineficientes; útil para comparar semestres lectivos con vacaciones y justificar inversiones en eficiencia.",
+      "unidad": "kWh / usuario·mes",
+      "formula": "IE = Σ(activeenergyimportday ÷ [constante de conversión de unidad]) / N_usuarios_activos",
+      "variables_fuentes": "activeenergyimportday: [Wh] ÷1000 → kWh (Medidores Landis). N_usuarios_activos: estudiantes matriculados + empleados FTE activos. PENDIENTE: definir institucionalmente y fijar la fuente (sistemas académico y RRHH); mantener fija para comparabilidad.",
+      "ods": [
+        4,
+        7,
+        9
+      ],
+      "objetivo_evisor": "Optimización intensidad",
+      "eje_esg": "Liderazgo consciente",
+      "grupo_interes": "Sector académico e investigativo",
+      "notas": ""
+    },
+    {
+      "id": "KPI 03",
+      "nombre": "Pico de demanda",
+      "grupo": "Gestión de demanda",
+      "tipo_umbral": "A definir",
+      "umbral": "Se calcula con el promedio del pico mensual del primer año más una desviación estándar.",
+      "umbral_alerta_ficha": "A definir con datos del primer año (media del pico mensual + 1 desviación estándar). Reducción del pico como objetivo de mejora continua.",
+      "rol_en_sistema": "Reporta el valor máximo de potencia instantánea consumida en el período, en kW, con fecha y hora exactas. Determina el cargo por demanda en la factura eléctrica colombiana: reducir el pico se traduce en ahorro monetario (a diferencia de LF o PAR, adimensionales).",
+      "unidad": "kW (con fecha y hora de ocurrencia)",
+      "formula": "D_pico = máximo(activepower) en el período analizado, por bloque + registrar fecha, hora y nombre del bloque donde ocurre el pico",
+      "variables_fuentes": "activepower: potencia activa total instantánea [kW] (Medidores Landis / etsmartmeter). Resolución horaria, por bloque. El máximo del período es el dato central.",
+      "ods": [
+        7,
+        9
+      ],
+      "objetivo_evisor": "Minimización del pico",
+      "eje_esg": "Liderazgo consciente",
+      "grupo_interes": "Líderes institucionales y sector empresarial",
+      "notas": ""
+    },
+    {
+      "id": "KPI 04",
+      "nombre": "Ahorro energético verificado",
+      "grupo": "Eficiencia energética",
+      "tipo_umbral": "A definir",
+      "umbral": "Pendiente recibir los datos de EPM para verificar el consumo completo de la Universidad, tanto para umbral como para datos de período actual.",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses).",
+      "rol_en_sistema": "Responde: ¿las acciones de gestión energética del año pasado realmente redujeron el consumo? Mide el ahorro real frente a la línea base ajustada por ocupación y temperatura, para evitar que una caída de estudiantes aparezca falsamente como ahorro.",
+      "unidad": "%",
+      "formula": "Ahorro (%) = [1 − Σ(E_actual ÷ 1000) / E_base_ajustada] × 100. E_base_ajustada = consumo del período equivalente del año anterior, normalizado por ocupación y temperatura (ISO 50001, Anexo B).",
+      "variables_fuentes": "activeenergyimportday: [Wh] ÷1000 → kWh (Medidores Landis). E_base_ajustada: consumo de referencia del año anterior corregido por N_usuarios y temperatura promedio; se construye durante el primer año de operación.",
+      "ods": [
+        7,
+        9,
+        13
+      ],
+      "objetivo_evisor": "Reducción de consumo",
+      "eje_esg": "Regeneración y resiliencia",
+      "grupo_interes": "Todos los grupos de interés",
+      "notas": ""
+    },
+    {
+      "id": "KPI 05",
+      "nombre": "Emisiones de CO₂ — Huella de carbono del Ecocampus",
+      "grupo": "Sostenibilidad ESG",
+      "tipo_umbral": "A definir",
+      "umbral": "Es posible que sostenibilidad tenga este KPI y su umbral. Pendiente verificarlo.",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses). Al ser de los más reconocidos, debe socializarse con líderes institucionales y alinearse con la política de carbono neutralidad.",
+      "rol_en_sistema": "Convierte el consumo eléctrico en toneladas de CO₂ equivalente usando el factor de emisión del SIN colombiano. Comunica el impacto ambiental a audiencias no técnicas y es clave para el reporte de sostenibilidad y el seguimiento de la Ley 2169 de 2021.",
+      "unidad": "tCO₂e (toneladas de CO₂ equivalente)",
+      "formula": "CO₂ = FE_año × Σ(activeenergyimportday ÷ 1000). FE_2025 = 0,000097018 tCO₂e/kWh (= 0,097018 tCO₂e/MWh). Actualizar FE cada año con la publicación de XM.",
+      "variables_fuentes": "activeenergyimportday: [Wh] ÷1000 → kWh (Medidores Landis). FE_año: factor de emisión del SIN. Para 2025: 0,097018 tCO₂e/MWh (XM S.A. E.S.P., publicado 30/01/2026). Es el factor de mezcla promedio del SIN para inventarios de GEI, no el factor marginal.",
+      "ods": [
+        7,
+        13,
+        17
+      ],
+      "objetivo_evisor": "Impacto ambiental",
+      "eje_esg": "Regeneración y resiliencia",
+      "grupo_interes": "Sector público y comunidad",
+      "notas": ""
+    },
+    {
+      "id": "KPI 06",
+      "nombre": "Performance Ratio del sistema fotovoltaico (PR)",
+      "grupo": "Generación renovable",
+      "tipo_umbral": "Bibliografía",
+      "umbral": "PR ≥ 75 % (objetivo). Alerta si PR < 65 % (posible falla o degradación). El 80 % estándar europeo no aplica al clima tropical de Medellín (Kumar et al., 2019). Referencia generada con IA, pendiente de revisión; los fotovoltaicos serán los últimos en implementarse.",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses).",
+      "rol_en_sistema": "Mide qué tan eficientemente el sistema fotovoltaico convierte la energía solar disponible en energía eléctrica útil. Un PR bajo puede señalar suciedad, sombreado, fallas de inversores o degradación por temperatura.",
+      "unidad": "%",
+      "formula": "PR = (YF / RY) × 100. YF = Σ(energyproducedtoday) / P_instalada [kWh por kWp]. RY = Σ(solarirradiation × Δt_horas) / 1000 [horas de referencia]. Δt = intervalo de medición en horas (resolución horaria: Δt = 1).",
+      "variables_fuentes": "energyproducedtoday: energía generada [kWh] — Fronius Bloque 11 (etfroniusinverter) y Enphase Bloque 10 (etenphaseinverter). solarirradiation: irradiancia [W/m²] — Sensor Fronius (etfroniussensorcard). P_instalada: potencia FV instalada [kWp], parámetro fijo. PENDIENTE: confirmar potencia exacta de bloques 10 y 11.",
+      "ods": [
+        7,
+        9,
+        13
+      ],
+      "objetivo_evisor": "Integración de renovables",
+      "eje_esg": "Regeneración y resiliencia",
+      "grupo_interes": "Sector académico y empresarial",
+      "notas": "Falta P_instalada de los sistemas FV; pendiente reunión de explicación (parece existir barrera para la implementación). Dependencia técnica no resuelta: solarirradiation viene en W/m² (potencia instantánea), no en kWh/m² (energía acumulada); la integración temporal requiere la resolución exacta de los archivos Fronius ('Sin resolución (original)'). No calcular hasta definir esa resolución."
+    },
+    {
+      "id": "KPI 07",
+      "nombre": "Fracción de autosuficiencia solar (SS)",
+      "grupo": "Generación renovable",
+      "tipo_umbral": "Bibliografía",
+      "umbral": "≥ 15 % orientador. Debe revisarse con los datos reales del primer año (GRI 302-1, Ley 2169/2021). Referencia generada con IA, pendiente de revisión; verificar si se puede expresar/calcular con una fórmula distinta.",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses). Fuente: GRI 302-1 (autoconsumo renovable) y Ley 2169 de 2021 (autoconsumo FNCER). El 15 % es orientador y está sujeto a revisión según la capacidad instalada real.",
+      "rol_en_sistema": "Responde la pregunta más común de grupos no técnicos: ¿qué porcentaje de la energía del campus viene de sus propios paneles? Es el indicador de sostenibilidad más comprensible y el estándar GRI para reportes.",
+      "unidad": "%",
+      "formula": "SS = [Σ(E_solar_autoconsumida) / Σ(aeimportday÷1000 + E_solar_AC)] × 100. Si no hay medición de exportación a red: E_solar_autoconsumida ≈ energyproducedtoday (proxy conservador).",
+      "variables_fuentes": "energyproducedtoday: energía generada [kWh] — Fronius (etfroniusinverter, Bloque 11) y Enphase (etenphaseinverter, Bloque 10). activeenergyimportday: energía consumida desde la red [Wh] ÷1000 → kWh (Medidores Landis).",
+      "ods": [
+        7,
+        13,
+        17
+      ],
+      "objetivo_evisor": "Integración de renovables",
+      "eje_esg": "Regeneración y resiliencia",
+      "grupo_interes": "Estudiantes, egresados y comunidad",
+      "notas": "Si no existe medidor de exportación a la red, asumir que toda la generación solar es autoconsumida es un supuesto conservador que puede subestimar la autosuficiencia real. PENDIENTE: verificar si el inversor XW (etinverterxw) registra la energía exportada. Documentar el supuesto en cada cálculo."
+    },
+    {
+      "id": "KPI 08",
+      "nombre": "Factor de carga (Load Factor)",
+      "grupo": "Gestión de demanda",
+      "tipo_umbral": "A definir",
+      "umbral": "LF ≥ 0,65 (orientativo).",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses).",
+      "rol_en_sistema": "Mide qué tan uniforme es el perfil de consumo eléctrico a lo largo del tiempo. Un LF alto es deseable: la demanda está distribuida de forma estable, reduce el riesgo de cargos por pico y facilita la gestión de la red.",
+      "unidad": "Adimensional (valor entre 0 y 1)",
+      "formula": "LF = promedio(activepower) / máximo(activepower) en el período analizado, por bloque",
+      "variables_fuentes": "activepower: potencia activa total [kW] (Medidores Landis / etsmartmeter). El denominador es el máximo del período analizado, no la capacidad nominal del medidor.",
+      "ods": [
+        7,
+        9
+      ],
+      "objetivo_evisor": "Minimización del pico",
+      "eje_esg": "Liderazgo consciente",
+      "grupo_interes": "Equipo de mantenimiento",
+      "notas": ""
+    },
+    {
+      "id": "KPI 09",
+      "nombre": "Índice de consumo no operacional",
+      "grupo": "Gestión de demanda",
+      "tipo_umbral": "A definir",
+      "umbral": "Umbral a definir con datos del primer año de operación. Referencia cualitativa: Papadopoulos et al. (2016) reportan valores altos de f₄ en la mayoría de campus estudiados (consumo nocturno relevante).",
+      "umbral_alerta_ficha": "A definir con datos del primer año. Reducción del consumo no operacional como objetivo de mejora.",
+      "rol_en_sistema": "Mide qué fracción de la energía del día se consume en horario no operacional (22:00–05:59). Un valor alto indica equipos encendidos innecesariamente, climatización sin apagar o iluminación sin control. Es el KPI de mayor valor operativo inmediato, sin necesidad de inversión.",
+      "unidad": "%",
+      "formula": "ICNO = [Σ(E_22h-06h ÷ 1000) / Σ(E_total ÷ 1000)] × 100. Intervalo nocturno: 22:00–05:59 h. (La conversión ÷1000 se cancela en el ratio; se documenta para trazabilidad.)",
+      "variables_fuentes": "activeenergyimportday: [Wh] segmentada por franja horaria usando time_index_colombia (Medidores Landis / etsmartmeter).",
+      "ods": [
+        7,
+        9
+      ],
+      "objetivo_evisor": "Reducción de consumo",
+      "eje_esg": "Regeneración y resiliencia",
+      "grupo_interes": "Equipo de mantenimiento",
+      "notas": "En la tabla de trazabilidad aparece como 'KPI 09 — Consumo nocturno f₄'."
+    },
+    {
+      "id": "KPI 10",
+      "nombre": "Desbalance de tensión",
+      "grupo": "Calidad del suministro",
+      "tipo_umbral": "Estándar",
+      "umbral": "Indicado por el equipo de e-Visor. < 2 % objetivo. Alerta si > 3 %.",
+      "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses).",
+      "rol_en_sistema": "En un sistema trifásico las tres fases deben tener tensiones aproximadamente iguales. El desbalance provoca sobrecalentamiento, vibraciones y reducción de vida útil en motores, servidores y equipos de laboratorio. Este KPI mide cuánto difieren las tensiones de las tres fases respecto a su promedio.",
+      "unidad": "%",
+      "formula": "DB = [máx(|v1−v̄|, |v2−v̄|, |v3−v̄|) / v̄] × 100. v̄ = (v1 + v2 + v3) / 3. Método NEMA MG-1 (desvío máximo respecto al promedio).",
+      "variables_fuentes": "v1, v2, v3: tensiones de las tres fases [V] (Medidores Landis / etsmartmeter). Resolución horaria, por bloque.",
+      "ods": [
+        9
+      ],
+      "objetivo_evisor": "Calidad del suministro",
+      "eje_esg": "Liderazgo consciente",
+      "grupo_interes": "Equipo técnico y laboratorios",
+      "notas": "Conflicto de umbral: la tabla 3.1 lo marca 'Estándar' (< 2 % / alerta > 3 %), pero la ficha técnica indica 'A definir con datos del primer año'. Revisar cuál aplica."
+    },
+    {
+      "id": "KPI 11",
+      "nombre": "Factor de potencia total",
+      "grupo": "Calidad del suministro",
+      "tipo_umbral": "Estándar",
+      "umbral": "Indicado por el equipo de e-Visor. FP > 0,9. Alerta si FP < 0,85.",
+      "umbral_alerta_ficha": "FP ≥ 0,9 en condición normal. Alerta si FP < 0,85. Fuente: directriz del equipo de e-Visor.",
+      "rol_en_sistema": "Mide la eficiencia con que se usa la corriente eléctrica. Un FP bajo demanda más corriente de la necesaria, sobrecarga conductores, aumenta pérdidas y genera penalidades: la CREG exige FP mínimo de 0,9 en los puntos de conexión.",
+      "unidad": "Adimensional (entre 0 y 1)",
+      "formula": "FP = totalpowerfactor (variable directa del medidor — no requiere cálculo adicional).",
+      "variables_fuentes": "totalpowerfactor: factor de potencia total del sistema trifásico, variable directa (Medidores Landis / etsmartmeter). Resolución horaria, por bloque. En caso de alerta, complementar con reactivepower [kVAr].",
+      "ods": [
+        9
+      ],
+      "objetivo_evisor": "Calidad del suministro",
+      "eje_esg": "Liderazgo consciente",
+      "grupo_interes": "Gestión financiera y operaciones",
+      "notas": ""
+    }
+  ]
+}
