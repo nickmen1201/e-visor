@@ -549,17 +549,24 @@ def _layout_base(fig, h=360):
 
 
 def barras_horizontales(serie, titulo, xlabel, color_fn=None,
-                        ref_lines=None, h=None):
-    """Barras horizontales genéricas con colores por umbral."""
+                        ref_lines=None, h=None, colores=None,
+                        fmt='{:.2f}', hover=None, customdata=None, margin_r=100):
+    """Barras horizontales genéricas con colores por umbral.
+
+    `colores` permite pasar el semáforo ya resuelto cuando el umbral no depende
+    sólo del valor (KPI-03: cada bloque se juzga contra su propia historia).
+    """
     labels  = [str(x) for x in serie.index]
     valores = serie.values
-    colores = [color_fn(v) for v in valores] if color_fn else [C_TEAL] * len(valores)
+    if colores is None:
+        colores = [color_fn(v) for v in valores] if color_fn else [C_TEAL] * len(valores)
     fig = go.Figure(go.Bar(
         x=valores, y=labels, orientation='h',
         marker_color=colores, marker_line_width=0,
-        text=[f'{v:.2f}' for v in valores],
-        textposition='outside',
-        hovertemplate='%{y}: %{x:.3f}<extra></extra>',
+        text=[fmt.format(v) for v in valores],
+        textposition='outside', cliponaxis=False,
+        customdata=customdata,
+        hovertemplate=hover or '%{y}: %{x:.3f}<extra></extra>',
     ))
     if ref_lines:
         for val, color, label in ref_lines:
@@ -571,7 +578,7 @@ def barras_horizontales(serie, titulo, xlabel, color_fn=None,
         xaxis_title=xlabel,
         plot_bgcolor='#FFFFFF', paper_bgcolor='#FFFFFF',
         height=h or max(300, 38 * len(serie) + 110),
-        margin=dict(t=48, b=44, l=100, r=100),
+        margin=dict(t=48, b=44, l=100, r=margin_r),
         font=dict(family='IBM Plex Sans, Arial, sans-serif', size=12),
     )
     fig.update_xaxes(gridcolor='#EEF0F3', linecolor='#DDE2EA')
@@ -806,8 +813,14 @@ def heatmap_semanal(df):
     return fig
 
 
-def tira_estado(kpi_df, col, titulo, color_fn, leyenda):
-    """Heatmap calendario de estado (reemplaza la tira matplotlib)."""
+def tira_estado(kpi_df, col, titulo, color_fn, leyenda,
+                estado_fn=None, fmt='{:.3f}'):
+    """Heatmap calendario de estado (reemplaza la tira matplotlib).
+
+    `estado_fn(entity_id, fecha, valor) -> color` sustituye a `color_fn` cuando
+    el umbral depende del bloque y del mes, no sólo del valor (KPI-03). Si
+    devuelve C_GRAY la celda se pinta como «sin base».
+    """
     pivot  = kpi_df.pivot_table(index='entity_id', columns='fecha',
                                 values=col, aggfunc='mean')
     fechas = pivot.columns.tolist()
@@ -817,27 +830,31 @@ def tira_estado(kpi_df, col, titulo, color_fn, leyenda):
     n_col  = len(fechas)
     n_row  = len(pivot)
 
-    # Convertir a valor numérico de estado: 0=verde 0.5=ámbar 1=rojo nan=gris
+    # Estado como código: 0=verde 1=ámbar 2=rojo 3=sin base · nan=sin dato
+    _COD = {C_TEAL: 0.0, C_AMBER: 1.0, C_RED: 2.0, C_GRAY: 3.0}
     z_estado = np.full(z.shape, np.nan)
     for i in range(n_row):
         for j in range(n_col):
             v = z[i, j]
             if np.isnan(v):
                 continue
-            c = color_fn(v)
-            z_estado[i, j] = 0.0 if c == C_TEAL else (0.5 if c == C_AMBER else 1.0)
+            c = (estado_fn(pivot.index[i], fechas[j], v) if estado_fn
+                 else color_fn(v))
+            z_estado[i, j] = _COD.get(c, 2.0)
 
+    _b = 1 / 6, 1 / 2, 5 / 6          # bordes entre las cuatro bandas
     colorscale = [
-        [0.0,  C_TEAL],
-        [0.49, C_TEAL],
-        [0.5,  C_AMBER],
-        [0.74, C_AMBER],
-        [0.75, C_RED],
-        [1.0,  C_RED],
+        [0.0,   C_TEAL],  [_b[0], C_TEAL],
+        [_b[0], C_AMBER], [_b[1], C_AMBER],
+        [_b[1], C_RED],   [_b[2], C_RED],
+        [_b[2], C_GRAY],  [1.0,   C_GRAY],
     ]
+    _NOM = {0.0: 'cumple', 1.0: 'revisar', 2.0: 'alerta', 3.0: 'sin base'}
     hover = [[
-        f'{_bloque_label(pivot.index[i])} · {fechas[j].strftime("%d %b %Y")}<br>'
-        f'Valor: {z[i,j]:.3f}' if not np.isnan(z[i,j]) else 'Sin dato'
+        (f'{_bloque_label(pivot.index[i])} · {fechas[j].strftime("%d %b %Y")}<br>'
+         f'Valor: {fmt.format(z[i,j])}<br>'
+         f'Estado: {_NOM.get(z_estado[i,j], "—")}')
+        if not np.isnan(z[i, j]) else 'Sin dato'
         for j in range(n_col)
     ] for i in range(n_row)]
 
@@ -846,7 +863,7 @@ def tira_estado(kpi_df, col, titulo, color_fn, leyenda):
         x=[f.strftime('%d-%b') for f in fechas],
         y=labels_y,
         colorscale=colorscale,
-        zmin=0, zmax=1,
+        zmin=0, zmax=3,
         showscale=False,
         text=hover, hoverinfo='text',
         xgap=1.5, ygap=1.5,
@@ -1401,8 +1418,6 @@ with tab_kpi:
         st.info("KPI 01 no disponible para el período seleccionado.")
 
     # ── KPI 03 — Pico de demanda ─────────────────────────────────────────────
-    # Bullet chart: barra = pico del período; marcas verticales = objetivo (μ) y
-    # alerta (μ+1σ) históricos; columna derecha = valor, fecha/hora y estado.
     st.markdown("## KPI 03 — Pico de demanda absoluto")
     k3_f = (kpi_f[['entity_id', 'fecha', 'KPI03_pico_kw', 'fecha_pico', 'hora_pico']]
             .dropna(subset=['KPI03_pico_kw'])
@@ -1411,98 +1426,103 @@ with tab_kpi:
     if k3_f.empty:
         st.info("KPI 03 no disponible para el período seleccionado.")
     else:
-        # Un renglón por bloque: el mes de mayor pico dentro del período, con su
-        # fecha/hora de ocurrencia y el umbral construido con su historia previa.
+        # Historia mensual completa por bloque: es la base del umbral propio y no
+        # depende del filtro de fechas (el umbral mira hacia atrás, no al período).
+        _hist_k3 = {e: g.set_index('fecha')['KPI03_pico_kw'].sort_index()
+                    for e, g in kpi.dropna(subset=['KPI03_pico_kw']).groupby('entity_id')}
+        _cache_k3 = {}
+
+        def _umbral_k3(entity_id, fecha):
+            """Objetivo, alerta y nº de meses de base de un bloque en un mes."""
+            clave = (entity_id, fecha)
+            if clave not in _cache_k3:
+                _cache_k3[clave] = _umbral_pico(
+                    _hist_k3.get(entity_id, pd.Series(dtype=float)), fecha)
+            return _cache_k3[clave]
+
+        def _color_k3(entity_id, fecha, valor):
+            obj, alerta, _ = _umbral_k3(entity_id, fecha)
+            if not np.isfinite(obj):
+                return C_GRAY                      # sin base histórica suficiente
+            return _semaforo(valor, obj, alerta, mayor_es_mejor=False)
+
+        # Un renglón por bloque: su mayor pico del período, con fecha y hora.
         _filas = []
         for _eid, _g in k3_f.groupby('entity_id'):
-            _r    = _g.loc[_g['KPI03_pico_kw'].idxmax()]
-            _hist = (kpi[kpi['entity_id'] == _eid]          # historia completa,
-                     .dropna(subset=['KPI03_pico_kw'])      # no la del filtro
-                     .set_index('fecha')['KPI03_pico_kw'].sort_index())
-            _obj, _alerta, _nbase = _umbral_pico(_hist, _r['fecha'])
-            _filas.append(dict(bloque=_bloque_label(_eid),
-                               pico=float(_r['KPI03_pico_kw']),
-                               fecha=_r['fecha_pico'], hora=_r['hora_pico'],
-                               objetivo=_obj, alerta=_alerta, n_base=_nbase))
-        agg = (pd.DataFrame(_filas)
-               .sort_values('pico', ascending=True)   # el mayor arriba en barras h.
-               .reset_index(drop=True))
-
-        agg['color'] = [C_GRAY if not np.isfinite(o)
-                        else _semaforo(p, o, a, mayor_es_mejor=False)
-                        for p, o, a in zip(agg['pico'], agg['objetivo'], agg['alerta'])]
-        agg['estado'] = ['sin base' if c == C_GRAY else
-                         {'ok': 'cumple', 'warn': 'revisar', 'bad': 'alerta'}[_estado_from_color(c)]
-                         for c in agg['color']]
-        etq_k3 = agg['bloque'].tolist()
-
-        fig_k3 = go.Figure()
-        fig_k3.add_trace(go.Bar(
-            x=agg['pico'], y=etq_k3, orientation='h', name='Pico máx.',
-            width=0.55, marker=dict(color=agg['color'].tolist(), line_width=0),
-            customdata=[[_fmt_fecha_hora(f, h),
-                         '—' if not np.isfinite(o) else f'{o:.1f} kW',
-                         '—' if not np.isfinite(a) else f'{a:.1f} kW', e, int(n)]
-                        for f, h, o, a, e, n in zip(agg['fecha'], agg['hora'], agg['objetivo'],
-                                                    agg['alerta'], agg['estado'], agg['n_base'])],
-            hovertemplate=('<b>%{y}</b> · %{x:.1f} kW<br>Ocurrió: %{customdata[0]}<br>'
-                           'Objetivo (μ): %{customdata[1]}<br>Alerta (μ+1σ): %{customdata[2]}<br>'
-                           'Estado: %{customdata[3]} · base %{customdata[4]} meses<extra></extra>'),
-        ))
-        # Marcas verticales (no horizontales: sobre una barra horizontal no se
-        # distinguen) con halo blanco para que se lean encima del relleno.
-        for _x, _col, _nom in ((agg['objetivo'], C_TEAL, 'Objetivo (μ hist.)'),
-                               (agg['alerta'],   C_RED,  'Alerta (μ+1σ hist.)')):
-            fig_k3.add_trace(go.Scatter(
-                x=_x, y=etq_k3, mode='markers', showlegend=False, hoverinfo='skip',
-                marker=dict(symbol='line-ns', size=30, line=dict(width=6, color=SURFACE)),
+            _r = _g.loc[_g['KPI03_pico_kw'].idxmax()]
+            _obj, _alerta, _nbase = _umbral_k3(_eid, _r['fecha'])
+            _col = _color_k3(_eid, _r['fecha'], _r['KPI03_pico_kw'])
+            _filas.append(dict(
+                bloque=_bloque_label(_eid), pico=float(_r['KPI03_pico_kw']),
+                cuando=_fmt_fecha_hora(_r['fecha_pico'], _r['hora_pico']),
+                cuando_largo=_fmt_fecha_hora(_r['fecha_pico'], _r['hora_pico'], largo=True),
+                objetivo=_obj, alerta=_alerta, n_base=_nbase, color=_col,
+                estado=('sin base' if _col == C_GRAY else
+                        {'ok': 'cumple', 'warn': 'revisar',
+                         'bad': 'alerta'}[_estado_from_color(_col)]),
             ))
-            fig_k3.add_trace(go.Scatter(
-                x=_x, y=etq_k3, mode='markers', name=_nom,
-                marker=dict(symbol='line-ns', size=26, color=_col,
-                            line=dict(width=2.6, color=_col)),
-                hovertemplate='%{y}: %{x:.1f} kW<extra>' + _nom + '</extra>',
-            ))
-        # Valores en un canal propio a la derecha del área de trazado: así nunca
-        # chocan con las marcas de umbral ni se recortan en el borde.
-        for _y, _p, _f, _h, _e in zip(etq_k3, agg['pico'], agg['fecha'],
-                                      agg['hora'], agg['estado']):
-            fig_k3.add_annotation(
-                xref='paper', x=1.015, y=_y, xanchor='left', align='left',
-                showarrow=False, font=dict(size=12, color=INK),
-                text=(f'<b>{_p:,.1f} kW</b><br>'
-                      f'<span style="font-size:10.5px;color:{MUTED}">'
-                      f'{_fmt_fecha_hora(_f, _h)} · {_e}</span>'),
-            )
+        k3 = pd.DataFrame(_filas).sort_values('pico').reset_index(drop=True)
 
-        _xmax_k3 = float(np.nanmax([agg['pico'].max(), agg['alerta'].max()]))
-        _layout_base(fig_k3, h=max(300, 42 * len(agg) + 120))
-        fig_k3.update_layout(
-            barmode='overlay',
-            margin=dict(t=44, b=48, l=68, r=196),   # r: canal de valores
-            legend=dict(orientation='h', y=1.02, yanchor='bottom',
-                        x=0, xanchor='left'),       # izquierda: no tapa la modebar
+        # Ranking en kW — la magnitud es lo que factura. El umbral es propio de
+        # cada bloque, así que no cabe como línea única: va en el color, en el
+        # hover y en la tira de estado de abajo.
+        serie_k3 = pd.Series(k3['pico'].values, index=k3['bloque'])
+        fig_k3 = barras_horizontales(
+            serie_k3, titulo='KPI 03 — Pico máximo por bloque',
+            xlabel=f'kW · {periodo_dias} días',
+            colores=k3['color'].tolist(),
+            fmt='{:,.1f} kW',
+            margin_r=150,
+            customdata=[[c, ('—' if not np.isfinite(o) else f'{o:,.1f} kW'),
+                         ('—' if not np.isfinite(a) else f'{a:,.1f} kW'), e, int(n)]
+                        for c, o, a, e, n in zip(k3['cuando'], k3['objetivo'],
+                                                 k3['alerta'], k3['estado'], k3['n_base'])],
+            hover=('<b>%{y}</b> — %{x:,.1f} kW<br>Ocurrió: %{customdata[0]}<br>'
+                   'Objetivo (μ): %{customdata[1]} · Alerta (μ+1σ): %{customdata[2]}<br>'
+                   'Estado: %{customdata[3]} · base: %{customdata[4]} meses<extra></extra>'),
         )
-        fig_k3.update_xaxes(range=[0, _xmax_k3 * 1.06], title='kW')
         _chart(fig_k3, use_container_width=True)
 
-        _top_k3  = agg.iloc[-1]                     # orden ascendente → el mayor
-        _n_alert = int((agg['estado'] == 'alerta').sum())
-        _n_base  = int((agg['estado'] == 'sin base').sum())
-        st.info(
-            f"Pico del campus en el período: **{_top_k3['pico']:,.1f} kW** en "
-            f"**{_top_k3['bloque']}**, el "
-            f"{_fmt_fecha_hora(_top_k3['fecha'], _top_k3['hora'], largo=True)}. "
-            f"Ese valor es el que fija el cargo por demanda de la factura. "
-            + (f"{_n_alert} bloque(s) superan su umbral de alerta. " if _n_alert else "")
-            + (f"{_n_base} sin base histórica suficiente." if _n_base else "")
-        )
+        _top = k3.iloc[-1]
+        _obj_top, _alerta_top, _ = _top['objetivo'], _top['alerta'], None
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Pico del campus", f"{_top['pico']:,.1f} kW",
+                  help="Mayor potencia instantánea registrada en el período.")
+        m2.metric("Bloque del pico", _top['bloque'],
+                  delta=_top['cuando_largo'], delta_color="off",
+                  help="Bloque, fecha y hora de ocurrencia del pico del campus.")
+        if np.isfinite(_obj_top):
+            m3.metric("Exceso sobre su objetivo", f"{_top['pico'] - _obj_top:+,.1f} kW",
+                      delta=f"objetivo {_obj_top:,.1f} kW", delta_color="off",
+                      help="Distancia hasta la media histórica de picos del bloque.")
+        else:
+            m3.metric("Exceso sobre su objetivo", "—", help="Sin base histórica suficiente.")
+
+        _n_alerta = int((k3['estado'] == 'alerta').sum())
+        _n_sinbase = int((k3['estado'] == 'sin base').sum())
+        _txt = (f"El pico del campus fue **{_top['pico']:,.1f} kW** en **{_top['bloque']}**, "
+                f"el {_top['cuando_largo']}. Ese valor —y no el consumo total— es el que "
+                f"fija el cargo por demanda de la factura: bajarlo se traduce en ahorro "
+                f"directo.")
+        if _n_alerta:
+            st.warning(_txt + f" **{_n_alerta} bloque(s)** superan su umbral de alerta.")
+        else:
+            st.info(_txt)
+
+        # Tira de estado mensual: aquí sí se ve el umbral de cada bloque mes a mes.
+        _chart(tira_estado(
+            k3_f, 'KPI03_pico_kw', 'KPI 03 — Pico de demanda',
+            None,
+            'verde ≤ μ\nnaranja ≤ μ+1σ\nrojo > μ+1σ\ngris sin base',
+            estado_fn=_color_k3, fmt='{:,.1f} kW',
+        ), use_container_width=True)
+
         st.caption(
             "Umbral propio KPI-03: objetivo = μ y alerta = μ+1σ de la serie mensual de "
-            "picos del bloque, sobre los 12 meses anteriores al mes del pico — el mes "
-            "evaluado no entra en su propio umbral. Con menos de 4 meses de base no se "
-            "emite semáforo (gris, «sin base»). Fuente: activepower horaria, medidores "
-            "Landis (etsmartmeter)."
+            "picos de cada bloque, sobre los 12 meses anteriores al mes evaluado — el mes "
+            "que se juzga no entra en su propio umbral. Con menos de 4 meses de base no se "
+            f"emite semáforo ({_n_sinbase} bloque(s) hoy). Fuente: activepower horaria, "
+            "medidores Landis (etsmartmeter)."
         )
 
     # ── KPI 05 — Emisiones CO₂ acumuladas ────────────────────────────────────
