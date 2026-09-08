@@ -34,14 +34,39 @@ Source of truth: `ecocampus_kpis_indicadores.json` (v `Indicadores_y_KPI_26_1_3`
 | IND-05 | f₃ — Min-to-mean | `min(P_op) / mean(P_op)` | activepower | REAL |
 | IND-06 | f₄ — Non-op load factor | `mean(P_non_op) / mean(P_op)` · non_op=22:00–05:59 | activepower | REAL |
 | IND-07 | CO₂ emissions | `9.7018e-8 × Σ(E_day[Wh])` → tCO₂e · FE_2025=0.097018 tCO₂e/MWh (XM, 2026-01-30) ⚠ replace legacy 0.18 everywhere | Δactiveenergyimport | REAL |
-| IND-08 | IGS — PV Yield Factor | `Σ(E_pv_day) / P_installed` → kWh/kWp | energyproducedtoday · source: Fronius B11 + Enphase B10 | PENDING (kWp unconfirmed) |
-| IND-09 | TCP — Panel temp delta | `mean(T_panel) − mean(T_ambient)` · ~0.4%/°C efficiency loss over TC | paneltemperature · ambienttemperature · source: Fronius sensor | PENDING |
+| IND-08 | IGS — PV Yield Factor | `Σ(E_pv_day) / P_installed` → kWh/kWp · **per plant, never a fleet average** | energyproducedtoday · source: `etfroniusinverter` + `etenphaseinverter` | REAL (kWp confirmed: 52.65 / 45.4 / 4.9) |
+| IND-09 | TCP — Panel temp delta | `mean(T_panel) − mean(T_ambient)` over hours with `G > 200 W/m²` | paneltemperature · ambienttemperature · source: Fronius sensor | REAL (γ still missing for the efficiency-loss extension) |
 | IND-10 | EB — Battery efficiency | `Σ(E_from_bat) / Σ(E_to_bat)` | energyfrombattery · energytobattery · source: `Inversor_Baterías` | PENDING |
 | IND-11 | Energy savings | `1 − (E_current / E_base)` | Δactiveenergyimport | PENDING (needs ≥12-mo baseline) |
 | IND-12 | VU — Voltage unbalance | `max(|vₙ−v̄|) / v̄ × 100` | v1, v2, v3 | REAL |
 | IND-13 | FD — Diversity Factor | `Σ max(P_i) / max(Σ P_i)` · i = each of the 16 meters · campus-level, needs timestamp alignment | activepower | REAL |
+| IND-14 | DFV — PV capacity availability | `Σ(kWp of operating plants) / Σ(kWp monitored) × 100` · a plant is operating in a month if `IGS_plant ≥ 0.20 × IGS_reference` (best plant that month) | energyproducedtoday + `plantas_fv` inventory | REAL |
 
 **Note:** HU (equivalent utilization hours) was dropped — it is not in the JSON spec nor computed by `dashboard.py`. Feeder chain: IND-01→KPI 08 · IND-06→KPI 09 · IND-07→KPI 05 · IND-11→KPI 04 · IND-12→KPI 10.
+
+---
+
+## PV fleet — inventory, status and aggregation rule
+
+Source of truth: `indicadores_y_kpis.json` → `plantas_fv` and `reglas_de_agregacion`.
+Capacities come from `Reporte Maestro.xlsx` (sheet *Fichas técnicas SFV*).
+
+| FIWARE id | System | Block | kWp | Own irradiance sensor | Status |
+|---|---|---|---|---|---|
+| `fronius_plant_52kWp` | SFV4_Terraza 11C-Sur | 11C | 52.65 | **yes** | OPERATING |
+| `fronius_plant_45kW` | SFV21–SFV24 | 18 | 45.4 *(inferred)* | no | **NOT OPERATING** |
+| `enphase_monitor` | SFV1_Terraza Juan Pablo II | 10 | 4.9 | no | OPERATING |
+
+**Two capacities, never one.** Campus installed = 138.37 kWp · monitored = 102.95 kWp (74 %) · **operating = 57.55 kWp**. Every PV figure must say which of the three it divides by. Of the ~35 kWp without telemetry nothing can be asserted either way.
+
+**Aggregation rule — a dead plant is treated in OPPOSITE ways depending on the question:**
+
+- **Efficiency family (IGS, TCP, KPI 06)** — *how well does the equipment convert sunlight?* → **always per plant. A fleet-wide value is forbidden.** Averaging does not dilute the fault, it disguises it as a different one: healthy-plant PR is 76.1 %, combined-fleet PR is 41.6 %. That 41.6 % would send maintenance hunting for soiling or shading on a plant that works.
+- **Impact family (IND-07 CO₂, KPI 07)** — *how much energy did the campus actually get?* → **always the whole fleet, dead plants included with their zero.** Dropping them would inflate self-sufficiency with energy that was never generated.
+
+**KPI 06 scope.** Computable only for `fronius_plant_52kWp`, the only plant with a coplanar sensor. It cannot be extended to Enphase B10: azimuth 126° vs the sensor's 238–264° is a different plane of incidence. Only days with the full 06:00–18:00 daylight band are evaluated — one missing hour silently lowers RY and inflates PR.
+
+**The 45 kW finding (2026-09).** Two of its four inverters produced nothing in 7 months; the other two stopped on **13–14 Feb 2026**. It delivered 701.3 kWh (1.8 % of Fronius generation) while holding 46 % of its installed capacity. Gap vs. the healthy plant's yield: **31,531 kWh · ≈ $27.1 M COP · 3.06 tCO₂e**. Telemetry proves the *reported* output is zero, **not** the cause: inverters off/disconnected and broken telemetry are both consistent with the data, and only a site visit to Block 18 separates them. Always present both hypotheses — claiming the loss as fact and being wrong costs credibility on everything else.
 
 ---
 

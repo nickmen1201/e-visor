@@ -80,12 +80,13 @@
     {
       "id": "IGS",
       "nombre": "Yield Factor (Rendimiento específico FV)",
-      "formula": "IGS = suma(energyproducedtoday) / P_instalada",
+      "formula": "IGS = suma(energyproducedtoday) / P_instalada_de_la_planta. Se calcula y se reporta POR PLANTA (ver reglas_de_agregacion): nunca un valor agregado de varias plantas.",
       "explicacion": "Energía producida normalizada por la potencia pico instalada. Permite comparar plantas de distinto tamaño.",
       "variables": [
         "energyproducedtoday"
       ],
-      "fuente": "Fronius/Enphase + Weather"
+      "fuente": "Fronius (etfroniusinverter) y Enphase (etenphaseinverter)",
+      "nota_alcance": "Pertenece a la familia de EFICIENCIA. Con los datos de 2026: 3,36 kWh/kWp-dia en la planta de 52,65 kWp y 0,07 en la de 45 kW. El promedio de la flota (1,84) no describe a ninguna de las dos."
     },
     {
       "id": "TCP",
@@ -140,6 +141,32 @@
         "activepower"
       ],
       "fuente": "Medidores Landis"
+    },
+    {
+      "id": "DFV",
+      "nombre": "Disponibilidad de capacidad fotovoltaica",
+      "formula": "DFV = Σ(kWp de plantas operativas) / Σ(kWp monitoreados) × 100. Una planta se considera operativa en el mes evaluado si IGS_planta >= 0,20 × IGS_referencia, donde IGS_referencia es el mayor IGS entre las plantas monitoreadas ese mismo mes.",
+      "explicacion": "Responde la pregunta que ningun otro indicador del catalogo hacia: ¿esta produciendo el equipo que tenemos? El umbral es RELATIVO y no absoluto a proposito: al compararse contra la mejor planta del mismo mes, se ajusta solo al clima y no marca falsas alarmas en temporada de lluvias. Una planta que rinde menos de un quinto que su vecina bajo el mismo sol no esta operando. Con los datos de 2026 este indicador habria disparado la alarma en FEBRERO, el mismo mes en que la planta se detuvo; el hallazgo real llego en septiembre, siete meses tarde.",
+      "variables": [
+        "energyproducedtoday"
+      ],
+      "fuente": "Fronius (etfroniusinverter) + Enphase (etenphaseinverter) + inventario plantas_fv",
+      "nota_alcance": "Se calcula solo sobre la capacidad MONITOREADA (102,95 kWp), no sobre la instalada del campus (138,37 kWp): de los ~35 kWp sin telemetria no se puede afirmar si producen o no. Declararlo en cada reporte.",
+      "validacion_2026": {
+        "alcance": "Calculado sobre la capacidad Fronius (98,05 kWp). Al integrar el Enphase (4,9 kWp, operativo) el denominador pasa a 102,95 kWp y el DFV estable a 55,9 %.",
+        "serie_mensual_pct": {
+          "2026-01": 100.0,
+          "2026-02": 53.7,
+          "2026-03": 53.7,
+          "2026-04": 53.7,
+          "2026-05": 53.7,
+          "2026-06": 53.7,
+          "2026-07": 53.7,
+          "2026-08": 53.7,
+          "2026-09": 53.7
+        },
+        "lectura": "Enero da 100 % porque solo tiene 2 dias observados y ambas plantas aun producian. Desde febrero el indicador se queda clavado en 53,7 % y no vuelve a subir: esa meseta plana es la firma de un activo caido, no de un mal mes."
+      }
     }
   ],
   "kpis": [
@@ -255,7 +282,7 @@
       "umbral_alerta_ficha": "A definir con datos del primer ciclo académico completo (≥ 12 meses).",
       "rol_en_sistema": "Mide qué tan eficientemente el sistema fotovoltaico convierte la energía solar disponible en energía eléctrica útil. Un PR bajo puede señalar suciedad, sombreado, fallas de inversores o degradación por temperatura.",
       "unidad": "%",
-      "formula": "PR = (YF / RY) × 100. YF = Σ(energyproducedtoday) / P_instalada [kWh por kWp]. RY = Σ(solarirradiation × Δt_horas) / 1000 [horas de referencia]. Δt = intervalo de medición en horas (resolución horaria: Δt = 1).",
+      "formula": "PR = (YF / RY) × 100. YF = suma(energyproducedtoday) / P_instalada [kWh/kWp]. RY = suma(solarirradiation × Δt_horas) / 1000 [horas de referencia], Δt = 1 h en resolucion horaria. Se calcula POR PLANTA y solo sobre plantas con sensor de irradiancia coplanar propio.",
       "variables_fuentes": "energyproducedtoday: energía generada [kWh] — Fronius Bloque 11 (etfroniusinverter) y Enphase Bloque 10 (etenphaseinverter). solarirradiation: irradiancia [W/m²] — Sensor Fronius (etfroniussensorcard). P_instalada: potencia FV instalada [kWp], parámetro fijo. PENDIENTE: confirmar potencia exacta de bloques 10 y 11.",
       "ods": [
         7,
@@ -265,7 +292,9 @@
       "objetivo_evisor": "Integración de renovables",
       "eje_esg": "Regeneración y resiliencia",
       "grupo_interes": "Sector académico y empresarial",
-      "notas": "Falta P_instalada de los sistemas FV; pendiente reunión de explicación (parece existir barrera para la implementación). Dependencia técnica no resuelta: solarirradiation viene en W/m² (potencia instantánea), no en kWh/m² (energía acumulada); la integración temporal requiere la resolución exacta de los archivos Fronius ('Sin resolución (original)'). No calcular hasta definir esa resolución."
+      "notas": "RESUELTO (2026-09): la resolucion temporal de los archivos Fronius ya no es un bloqueo. El crudo muestrea cada ~1,5 min y el limpio es la media horaria, asi que sum(G_h × 1 h)/1000 es la integral correcta. RESUELTO: P_instalada confirmada en 52,65 kWp por el Reporte Maestro, y validada de forma independiente porque el pico de potencia registrado (24.263 W) coincide con la placa del Symo 24.0-3 (24 kW). PENDIENTE: confirmar fisicamente la ubicacion del sensor. FIWARE lo cuelga de la planta de 52 kWp (Bloque 11C) pero el Reporte Maestro anota el acceso al sensor en SFV32 (Bloque 11B). Que el PR de 77,2 % sea plausible y ningun dia supere el 100 % es evidencia de que los planos son compatibles, pero es evidencia, no confirmacion.",
+      "nota_alcance": "Hoy solo es calculable para fronius_plant_52kWp (52,65 kWp), la unica con sensor propio. NO se puede extender a la planta Enphase del Bloque 10: su azimut es 126 frente a 238-264 del sensor, o sea otro plano de incidencia, y el resultado no tendria significado fisico. Prohibido publicar un PR de flota: seria 41,6 % contra el 76,1 % real de la planta sana.",
+      "metodologia": "Solo se evaluan dias con la franja de sol completa (06:00-18:00): una hora diurna ausente reduce RY en silencio e infla artificialmente el PR. Con los datos de 2026 esto deja 189 dias evaluables de 211."
     },
     {
       "id": "KPI 07",
@@ -286,7 +315,8 @@
       "objetivo_evisor": "Integración de renovables",
       "eje_esg": "Regeneración y resiliencia",
       "grupo_interes": "Estudiantes, egresados y comunidad",
-      "notas": "Si no existe medidor de exportación a la red, asumir que toda la generación solar es autoconsumida es un supuesto conservador que puede subestimar la autosuficiencia real. PENDIENTE: verificar si el inversor XW (etinverterxw) registra la energía exportada. Documentar el supuesto en cada cálculo."
+      "notas": "Si no existe medidor de exportación a la red, asumir que toda la generación solar es autoconsumida es un supuesto conservador que puede subestimar la autosuficiencia real. PENDIENTE: verificar si el inversor XW (etinverterxw) registra la energía exportada. Documentar el supuesto en cada cálculo.",
+      "nota_alcance": "Pertenece a la familia de IMPACTO: se calcula sobre TODA la flota, incluidas las plantas caidas con su cero. Excluir la planta de 45 kW inflaria la autosuficiencia con energia que nunca se genero. Ademas, el denominador solo cubre los 16 medidores Landis y NO hay medidor en el Bloque 11, que es justo donde esta la planta que si produce: el resultado debe publicarse como 'autosuficiencia sobre el campus medido', no sobre el campus completo."
     },
     {
       "id": "KPI 08",
@@ -366,5 +396,73 @@
       "grupo_interes": "Gestión financiera y operaciones",
       "notas": ""
     }
-  ]
+  ],
+  "plantas_fv": {
+    "nota": "Inventario necesario para IND-08, IND-14 y KPI 06: cada uno divide por la potencia instalada, que es distinta en cada planta. Fuente de las capacidades: 'Reporte Maestro.xlsx', hoja 'Fichas tecnicas SFV'.",
+    "capacidad_campus_kwp": 138.37,
+    "capacidad_monitoreada_kwp": 102.95,
+    "advertencia_capacidad_campus": "El Reporte Maestro se contradice consigo mismo: su tabla dinamica suma 139,77 kWp y su tabla de datos 138,37 kWp (SFV51 aparece como 'Casa Habitat 2,4' en una y 'Ecovilla_Carport 1,0' en la otra). Se adopta 138,37 por venir de la tabla de datos, que es la que detalla sistema por sistema. Pendiente resolver con quien administra el activo.",
+    "cobertura_telemetria": "Solo 102,95 de los 138,37 kWp instalados tienen telemetria en FIWARE (74 %). Los ~35 kWp restantes no son observables: ningun indicador FV puede afirmar nada sobre ellos.",
+    "plantas": [
+      {
+        "id_fiware": "fronius_plant_52kWp",
+        "sistema": "SFV4_Terraza bloque 11C-Sur",
+        "bloque": "11C",
+        "capacidad_kwp": 52.65,
+        "n_inversores": 2,
+        "inversor": "Fronius Symo 24.0-3 480 (24 kW AC c/u)",
+        "comisionamiento": "2019-01",
+        "sensor_irradiancia_propio": true,
+        "estado": "OPERATIVA",
+        "observacion": "Produjo los 211 dias del periodo observado. Es la unica planta con sensor de irradiancia coplanar, por lo que es la unica sobre la que el KPI 06 (PR) se puede calcular."
+      },
+      {
+        "id_fiware": "fronius_plant_45kW",
+        "sistema": "SFV21 + SFV22 + SFV23 + SFV24",
+        "bloque": "18",
+        "capacidad_kwp": 45.4,
+        "capacidad_confirmada": false,
+        "n_inversores": 4,
+        "comisionamiento": "2016-07 y 2025-05",
+        "sensor_irradiancia_propio": false,
+        "estado": "NO OPERATIVA",
+        "observacion": "Dos de los cuatro inversores no produjeron nada en 7 meses; los otros dos se detuvieron el 13-14 de febrero de 2026. Aporto 701,3 kWh (1,8 % de la generacion Fronius) siendo el 46 % de su capacidad instalada. La capacidad de 45,4 kWp es INFERIDA sumando los cuatro subsistemas del Bloque 18 del Reporte Maestro: pendiente de confirmar."
+      },
+      {
+        "id_fiware": "enphase_monitor",
+        "sistema": "SFV1_Terraza Juan Pablo II",
+        "bloque": "10",
+        "capacidad_kwp": 4.9,
+        "n_inversores": "microinversores (entidad agregada)",
+        "comisionamiento": "2013-10",
+        "azimut": 126,
+        "sensor_irradiancia_propio": false,
+        "estado": "OPERATIVA",
+        "observacion": "Produjo los 212 dias observados. Su azimut (126) difiere del de la planta con sensor (238-264), asi que su PR NO se puede calcular con la irradiancia del sensor Fronius: seria otro plano."
+      }
+    ]
+  },
+  "reglas_de_agregacion": {
+    "origen": "Derivada del hallazgo de la planta de 45 kW no operativa (2026-09). Una planta caida debe tratarse de forma OPUESTA segun que pregunta responde el indicador.",
+    "familia_eficiencia": {
+      "indicadores": [
+        "IGS",
+        "TCP",
+        "KPI 06"
+      ],
+      "pregunta": "Que tan bien convierte el equipo el recurso solar en electricidad.",
+      "regla": "SIEMPRE por planta. Prohibido publicar un valor agregado de varias plantas.",
+      "motivo": "Promediar no diluye el problema, lo disfraza de otro. Con los datos de 2026: el PR de la planta sana es 76,1 % y el de la flota combinada 41,6 %. Ese 41,6 % le diria a mantenimiento que todo el fotovoltaico falla, y lo mandaria a buscar suciedad o sombreado en una planta que funciona bien."
+    },
+    "familia_impacto": {
+      "indicadores": [
+        "CO2",
+        "KPI 07"
+      ],
+      "pregunta": "Cuanta energia recibio realmente el campus.",
+      "regla": "SIEMPRE toda la flota, incluidas las plantas caidas con su cero.",
+      "motivo": "Miden lo que efectivamente ocurrio. Excluir una planta caida inflaria la autosuficiencia con energia que nunca se genero."
+    },
+    "dos_capacidades": "Toda presentacion debe distinguir capacidad INSTALADA de capacidad OPERATIVA. Hoy, sobre lo monitoreado: 102,95 kWp instalados y 57,55 kWp operativos. La diferencia es el hallazgo, no un detalle metodologico."
+  }
 }
