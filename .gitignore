@@ -1,7 +1,10 @@
 # ── Datos crudos del medidor ─────────────────────────────────────────────────
 2026/etsmartmeter_*.csv
 2026/etsmartmeter_*.xlsx
+2026/et*.xlsx
+2026/et*.csv
 
+Reporte Maestro.xlsx
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -15,3 +18,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 ~$*.xlsx
+
+# ── Basura de Windows/OneDrive y previsualizaciones ──────────────────────────
+desktop.ini
+preview_fv.html
