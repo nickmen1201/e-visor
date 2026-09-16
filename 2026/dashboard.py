@@ -458,10 +458,54 @@ def cargar_datos():
     kpi_fv['fecha'] = (pd.to_datetime(kpi_fv['mes'], format='%Y-%m', errors='coerce')
                        + pd.offsets.MonthEnd(0))
 
-    return ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv
+    # ── Indicadores de desviación y contexto (IND-15 a IND-20) ───────────────
+    # Se quedan en formato largo, sin pivotar: mezclan granularidades (horaria,
+    # diaria y mensual) y no comparten la malla diaria de la tabla de arriba.
+    # IND-21 e IND-22 no entran: viajan como PENDIENTE hasta que llegue la
+    # frontera EPM, y dropna() sobre valor_num ya los deja fuera.
+    _IDS_DEV = ['IND-15', 'IND-16', 'IND-17', 'IND-18', 'IND-19', 'IND-20']
+    ind_dev = (ind_raw[ind_raw['indicador'].isin(_IDS_DEV)]
+               [['indicador', 'descripcion', 'bloque', 'fecha', 'mes', 'valor_num', 'unidad']]
+               .dropna(subset=['valor_num']).copy())
+    ind_dev['fecha']  = pd.to_datetime(ind_dev['fecha'], errors='coerce')
+    # Los mensuales llegan sin fecha: se deriva del mes para poder filtrarlos,
+    # igual que IND-14
+    _sin_f = ind_dev['fecha'].isna()
+    if _sin_f.any():
+        ind_dev.loc[_sin_f, 'fecha'] = (
+            pd.to_datetime(ind_dev.loc[_sin_f, 'mes'], format='%Y-%m', errors='coerce')
+            + pd.offsets.MonthEnd(0))
+    ind_dev['bloque']    = ind_dev['bloque'].map(_parse_bloque)
+    ind_dev['entity_id'] = ind_dev['bloque'].map(_entity_id_for)
+
+    # B9.1 + B9.2 → B9, igual que el resto del tablero. La regla de combinación
+    # depende de la magnitud: lo aditivo se suma (participación, pesos, kW de
+    # percentil) y lo relativo se promedia (desviaciones %, días de persistencia).
+    _AGG_DEV = {'IND-15': 'mean', 'IND-16': 'mean', 'IND-17': 'sum',
+                'IND-18': 'sum',  'IND-19': 'mean', 'IND-20': 'sum'}
+    _b9_dev = ind_dev['bloque'].isin(['9.1', '9.2'])
+    if _b9_dev.any():
+        _g9 = (ind_dev[_b9_dev]
+               .groupby(['indicador', 'descripcion', 'fecha', 'mes', 'unidad'],
+                        as_index=False)
+               .agg(_suma=('valor_num', 'sum'), _media=('valor_num', 'mean')))
+        _g9['valor_num'] = np.where(_g9['indicador'].map(_AGG_DEV).eq('sum'),
+                                    _g9['_suma'], _g9['_media'])
+        _g9 = _g9.drop(columns=['_suma', '_media'])
+        _g9['bloque'] = 9
+        # El entity_id se fija a mano, no con _entity_id_for: el bloque fusionado
+        # es 'SmartMeter_SM_B9' en el resto del tablero, mientras que
+        # _entity_id_for(9) daría 'SmartMeter_SM_9'. Si no coinciden, el filtro
+        # de bloque de la barra lateral deja estos indicadores en blanco.
+        _g9['entity_id'] = 'SmartMeter_SM_B9'
+        ind_dev = pd.concat([ind_dev[~_b9_dev], _g9], ignore_index=True)
+
+    ind_dev['bloque_lbl'] = ind_dev['entity_id'].map(_bloque_label)
+
+    return ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv, ind_dev
 
 
-ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv = cargar_datos()
+ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv, ind_dev = cargar_datos()
 
 
 # Estado textual del Excel → color de semáforo. El notebook de cálculo ya
@@ -1005,9 +1049,14 @@ ind13_f    = ind13[(ind13['mes'] >= inicio_mes) & (ind13['mes'] <= fin_mes)].cop
 ind_fv_f = ind_fv[ind_fv['fecha'].between(inicio, fin)].copy() if not ind_fv.empty else ind_fv
 kpi_fv_f = kpi_fv[kpi_fv['fecha'].between(inicio, fin)].copy() if not kpi_fv.empty else kpi_fv
 
+ind_dev_f = (ind_dev[ind_dev['fecha'].between(inicio, fin)].copy()
+             if not ind_dev.empty else ind_dev)
+
 if seleccion != "Todos":
     ind_f = ind_f[ind_f['entity_id'] == seleccion]
     kpi_f = kpi_f[kpi_f['entity_id'] == seleccion]
+    if not ind_dev_f.empty:
+        ind_dev_f = ind_dev_f[ind_dev_f['entity_id'] == seleccion]
 
 raw_f = None
 if raw is not None:
@@ -1516,6 +1565,227 @@ with tab_ind:
     else:
         st.info("IND-14 (DFV) sin datos para el rango seleccionado.")
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # IND-15 a IND-20 — desviación, percentiles, participación y valor
+    # ═══════════════════════════════════════════════════════════════════════
+    def _dev(ind_id):
+        """Filas de un indicador nuevo dentro del filtro activo."""
+        if ind_dev_f.empty:
+            return ind_dev_f
+        return ind_dev_f[ind_dev_f['indicador'] == ind_id]
+
+    # ── IND-15 — DDCE horaria ───────────────────────────────────────────────
+    st.markdown("## DDCE — Desviación del consumo esperado (horaria)")
+    _d15 = _dev('IND-15')
+    if not _d15.empty:
+        # Caja por bloque: la posición de la mediana dice si el esperado está
+        # bien calibrado y el ancho dice cuánto oscila el bloque hora a hora.
+        _ord15 = (_d15.groupby('bloque_lbl')['valor_num'].median()
+                  .sort_values().index.tolist())
+        fig15 = go.Figure()
+        for _b in _ord15:
+            fig15.add_trace(go.Box(
+                x=_d15[_d15['bloque_lbl'] == _b]['valor_num'],
+                name=_b, orientation='h', boxpoints=False,
+                marker_color=C_BLUE, line=dict(width=1.4), fillcolor='#E7EEF8',
+                hovertemplate='%{y}: %{x:.1f}%<extra></extra>',
+            ))
+        fig15.add_vline(x=0, line_color=C_GRAY, line_dash='dot', line_width=1.5,
+                        annotation_text='0 % = consumo esperado',
+                        annotation_position='top right',
+                        annotation_font_color=C_GRAY, annotation_font_size=10)
+        fig15.update_layout(
+            title=dict(text='IND-15 — Distribución de la desviación horaria por bloque',
+                       font=dict(size=13), x=0),
+            xaxis_title='Desviación sobre lo esperado (%)', showlegend=False,
+        )
+        fig15.update_yaxes(rangemode='normal')
+        _chart(_layout_base(fig15, h=max(320, 30 * len(_ord15) + 130)),
+               use_container_width=True)
+        _med15 = float(_d15['valor_num'].median())
+        st.caption(
+            f"Cada hora se compara contra la **mediana de esa misma hora y ese mismo tipo "
+            f"de día** en las 4 semanas previas (hábil / sábado / domingo-festivo). La "
+            f"mediana general del período es **{_med15:+.1f} %**: cuanto más cerca de cero, "
+            f"mejor calibrado está el esperado — es la señal de que el indicador mide "
+            f"consumo y no calendario. El ancho de cada caja es la volatilidad propia del "
+            f"bloque, no un error. La ficha lo llama *tiempo real*; aquí es la última hora "
+            f"cargada, porque el pipeline no tiene ingesta continua."
+        )
+    else:
+        st.info("IND-15 (DDCE horaria) sin datos para el rango seleccionado.")
+
+    # ── IND-16 — DDCE diaria ────────────────────────────────────────────────
+    st.markdown("## DDCE — Desviación del consumo esperado (diaria)")
+    _d16 = _dev('IND-16')
+    if not _d16.empty:
+        _s16 = _d16.groupby('fecha')['valor_num'].mean().sort_index()
+        fig16 = go.Figure(go.Bar(
+            x=_s16.index, y=_s16.values,
+            marker_color=[C_RED if v > 0 else C_TEAL for v in _s16.values],
+            marker_line_width=0,
+            hovertemplate='%{x|%d %b}: %{y:+.1f}%<extra></extra>',
+        ))
+        fig16.add_hline(y=0, line_color=C_GRAY, line_width=1.5)
+        fig16.update_layout(
+            title=dict(text='IND-16 — Desviación diaria sobre lo esperado',
+                       font=dict(size=13), x=0),
+            xaxis_title='Fecha', yaxis_title='Desviación (%)',
+        )
+        fig16.update_yaxes(rangemode='normal')
+        _chart(_layout_base(fig16, h=320), use_container_width=True)
+        _sobre = int((_s16 > 0).sum())
+        st.caption(
+            f"Mismo contraste que el horario, con el día ya cerrado. En el período "
+            f"seleccionado **{_sobre} de {len(_s16)} días** cerraron por encima de lo "
+            f"esperado. Que el reparto ronde la mitad es lo correcto: el esperado es una "
+            f"mediana, así que por construcción la mitad de los días debería quedar "
+            f"arriba. Lo que se vigila no es el signo de un día suelto sino su "
+            f"**magnitud** y su **repetición**, que es lo que mide la persistencia."
+        )
+    else:
+        st.info("IND-16 (DDCE diaria) sin datos para el rango seleccionado.")
+
+    # ── IND-17 — Percentiles de carga ───────────────────────────────────────
+    st.markdown("## Percentiles de carga (P90 / P95)")
+    _d17 = _dev('IND-17')
+    if not _d17.empty:
+        _p90 = (_d17[_d17['descripcion'].str.contains('P90', na=False)]
+                .groupby('bloque_lbl')['valor_num'].mean())
+        _p95 = (_d17[_d17['descripcion'].str.contains('P95', na=False)]
+                .groupby('bloque_lbl')['valor_num'].mean())
+        _ord17 = _p95.sort_values().index.tolist()
+        fig17 = go.Figure()
+        fig17.add_trace(go.Bar(
+            y=_ord17, x=[_p90.get(b, float('nan')) for b in _ord17],
+            name='P90', orientation='h', marker_color=C_BLUE, marker_line_width=0,
+            hovertemplate='%{y} · P90: %{x:.1f} kW<extra></extra>',
+        ))
+        fig17.add_trace(go.Bar(
+            y=_ord17, x=[_p95.get(b, float('nan')) for b in _ord17],
+            name='P95', orientation='h', marker_color=C_PURPLE, marker_line_width=0,
+            hovertemplate='%{y} · P95: %{x:.1f} kW<extra></extra>',
+        ))
+        fig17.update_layout(
+            barmode='group', bargap=0.25, bargroupgap=0.06,
+            title=dict(text='IND-17 — Banda alta de carga por bloque (promedio de los meses del período)',
+                       font=dict(size=13), x=0),
+            xaxis_title='Potencia (kW)',
+        )
+        fig17.update_yaxes(rangemode='normal')
+        _chart(_layout_base(fig17, h=max(320, 34 * len(_ord17) + 130)),
+               use_container_width=True)
+        st.caption(
+            "El P90 y el P95 marcan el techo habitual de cada bloque: solo el 10 % y el "
+            "5 % de las horas del mes lo superan. Sirven para decir que una lectura es "
+            "**inusual** y no apenas alta, y para dimensionar sin quedar preso del pico "
+            "absoluto, que suele ser un evento único. Es descriptivo: no lleva umbral ni "
+            "semáforo. Se calcula mensual por bloque, no por hora del día, porque el "
+            "formato de salida no tiene esa dimensión."
+        )
+    else:
+        st.info("IND-17 (percentiles) sin datos para el rango seleccionado.")
+
+    # ── IND-18 — Participación en el consumo submedido ──────────────────────
+    st.markdown("## Participación en el consumo submedido")
+    _d18 = _dev('IND-18')
+    if not _d18.empty:
+        _s18 = _d18.groupby('bloque_lbl')['valor_num'].mean().sort_values()
+        fig18 = barras_horizontales(
+            _s18,
+            titulo='IND-18 — Aporte de cada bloque al consumo medido (media del período)',
+            xlabel='Participación (%)',
+            colores=[C_BLUE] * len(_s18),
+            fmt='{:.1f}%',
+            hover='%{y}: %{x:.1f}% del consumo medido<extra></extra>',
+        )
+        _chart(fig18, use_container_width=True)
+        _top = _s18.sort_values(ascending=False)
+        st.caption(
+            f"Ordena a qué bloque conviene mirar primero: **{_top.index[0]}** concentra el "
+            f"**{_top.iloc[0]:.1f} %** del consumo medido y los tres mayores suman el "
+            f"**{_top.head(3).sum():.1f} %**. El denominador son los **16 medidores**, no "
+            f"el campus completo: mientras no llegue la frontera EPM no se conoce el total "
+            f"real de la universidad, así que esta cifra se reporta siempre como "
+            f"*del consumo medido*. Cuánto del campus es eso es justamente lo que "
+            f"responderá el IND-21."
+        )
+    else:
+        st.info("IND-18 (participación) sin datos para el rango seleccionado.")
+
+    # ── IND-19 — Persistencia de la desviación ──────────────────────────────
+    st.markdown("## Persistencia de la desviación")
+    _d19 = _dev('IND-19')
+    if not _d19.empty:
+        _piv19 = _d19.pivot_table(index='bloque_lbl', columns='fecha',
+                                  values='valor_num', aggfunc='mean')
+        _piv19 = _piv19.loc[_piv19.mean(axis=1).sort_values().index]
+        fig19 = go.Figure(go.Heatmap(
+            z=_piv19.values, x=_piv19.columns, y=_piv19.index,
+            zmin=0, zmax=7,
+            colorscale=[[0.0, '#F2F5FA'], [0.5, '#7FA4D0'], [1.0, C_RED]],
+            colorbar=dict(title=dict(text='días', font=dict(size=11, color=INK2)),
+                          tickfont=dict(size=10, color=INK2),
+                          tickvals=[0, 1, 2, 3, 4, 5, 6, 7], thickness=12),
+            hovertemplate='%{y} · %{x|%d %b}: %{z:.0f} de 7 días<extra></extra>',
+        ))
+        fig19.update_layout(
+            title=dict(text='IND-19 — Días por encima de lo esperado en los últimos 7',
+                       font=dict(size=13), x=0),
+            xaxis_title='Fecha', yaxis_title='',
+        )
+        fig19.update_yaxes(rangemode='normal')
+        _chart(_layout_base(fig19, h=max(320, 26 * len(_piv19) + 140)),
+               use_container_width=True)
+        _max19 = float(_d19['valor_num'].max())
+        st.caption(
+            f"Lo que separa un pico de un problema instalado. Una franja roja continua es "
+            f"un bloque que lleva días gastando de más: eso se atiende, un día suelto no. "
+            f"El máximo alcanzado en el período es **{_max19:.0f} de 7 días**. Solo se "
+            f"pintan ventanas completas — un día sin base suficiente en el DDCE no cuenta "
+            f"como día normal, sale del numerador y del denominador — así que el "
+            f"denominador siempre es 7 y las celdas son comparables entre sí."
+        )
+    else:
+        st.info("IND-19 (persistencia) sin datos para el rango seleccionado.")
+
+    # ── IND-20 — Valor económico de referencia [DEMO] ───────────────────────
+    st.markdown("## Valor económico de referencia")
+    st.warning(
+        "**DEMO — Valor de referencia:** tarifa de 600 COP/kWh, **no** la tarifa "
+        "facturada a la UPB. No incluye componentes variables ni contribución/exención. "
+        "Sirve para dimensionar órdenes de magnitud, no para conciliar contra la factura."
+    )
+    _d20 = _dev('IND-20')
+    if not _d20.empty:
+        _s20 = _d20.groupby('bloque_lbl')['valor_num'].sum().sort_values()
+        fig20 = go.Figure(go.Bar(
+            x=_s20.values, y=_s20.index.tolist(), orientation='h',
+            marker_color=C_AMBER, marker_line_width=0,
+            text=[f'${v/1e6:,.1f} M' for v in _s20.values],
+            textposition='outside', cliponaxis=False,
+            hovertemplate='%{y}: $%{x:,.0f} COP (referencia)<extra></extra>',
+        ))
+        fig20.update_layout(
+            title=dict(text='IND-20 — Costo de referencia del período · ⚠ Valor de referencia',
+                       font=dict(size=13), x=0),
+            xaxis_title='COP (referencia, no facturado)',
+            margin=dict(t=48, b=44, l=100, r=110),
+        )
+        fig20.update_yaxes(rangemode='normal')
+        _chart(_layout_base(fig20, h=max(320, 34 * len(_s20) + 130)),
+               use_container_width=True)
+        st.caption(
+            f"Total del período para la selección activa: **${_s20.sum():,.0f} COP** de "
+            f"referencia. Traducir kWh a pesos es lo que vuelve accionable el resto del "
+            f"tablero frente a quien decide presupuesto — pero el panel va en ámbar a "
+            f"propósito: nadie debe confundir esta cifra con un costo real. Cuando llegue "
+            f"la factura de EPM se cambia la tarifa en el notebook y el indicador pasa a "
+            f"REAL sin tocar nada más."
+        )
+    else:
+        st.info("IND-20 (valor económico) sin datos para el rango seleccionado.")
+
     # ── Indicadores en integración (PENDIENTE) ──────────────────────────────
     st.markdown("## Indicadores en integración")
     _PEND_INFO = [
@@ -1524,6 +1794,15 @@ with tab_ind:
          'pero da ~0,5 %, físicamente imposible. Requiere validación con operación.'),
         ('IND-11', 'Ahorro', 'Ahorro energético verificado',
          'Pendiente: se requiere línea base de ≥ 12 meses de operación histórica.'),
+        ('IND-21', 'CSE', 'Cobertura de submedición',
+         'Pendiente: requiere la serie de la frontera EPM (frontera_epm.csv). El cálculo ya '
+         'está implementado en el notebook y arranca solo en cuanto exista el archivo. '
+         'Es el que dirá qué porcentaje del campus alcanzan a ver los 16 medidores, y por '
+         'tanto cuánto vale el denominador del IND-18.'),
+        ('IND-22', 'CORR_FS', 'Correlación frontera – submedición',
+         'Pendiente: misma dependencia que el IND-21. Validará si los cambios de los '
+         'medidores explican las variaciones del consumo total del campus. Correlación no '
+         'es cobertura: se reportará siempre junto al IND-21 y al número de días pareados.'),
     ]
     for ind_id, sigla, nombre, pendiente in _PEND_INFO:
         st.markdown(
