@@ -167,6 +167,96 @@
         },
         "lectura": "Enero da 100 % porque solo tiene 2 dias observados y ambas plantas aun producian. Desde febrero el indicador se queda clavado en 53,7 % y no vuelve a subir: esa meseta plana es la firma de un activo caido, no de un mal mes."
       }
+    },
+    {
+      "id": "DDCE_H",
+      "nombre": "Desviación del consumo esperado (horaria)",
+      "formula": "DDCE_h [%] = (E_observada_h − E_esperada_h) / E_esperada_h × 100, con E_esperada_h = mediana de la energía del bloque en esa misma hora y tipo de día durante las 4 semanas previas",
+      "explicacion": "Compara el consumo de la última hora disponible contra el comportamiento típico del bloque a esa hora. Detecta desviaciones mientras aún se pueden corregir.",
+      "variables": [
+        "activeenergyimport"
+      ],
+      "fuente": "Medidores Landis",
+      "nota_alcance": "La ficha original lo llama 'tiempo real'; con el pipeline actual no hay ingesta continua, así que se calcula sobre la última hora cargada. El tipo de día (hábil / sábado / domingo-festivo) es obligatorio en el agrupador: sin él un lunes se compara contra domingos y la desviación es un artefacto del calendario. La mediana se usa en vez del promedio para que un pico aislado de la base no arrastre el esperado."
+    },
+    {
+      "id": "DDCE_D",
+      "nombre": "Desviación del consumo esperado (diaria)",
+      "formula": "DDCE_d [%] = (E_observada_d − E_esperada_d) / E_esperada_d × 100, con E_esperada_d = mediana de la energía diaria del mismo tipo de día durante las 4 semanas previas",
+      "explicacion": "Cierra el día contra lo esperado. Es la versión de seguimiento histórico del DDCE, la que alimenta el reporte de gestión y la persistencia.",
+      "variables": [
+        "activeenergyimport"
+      ],
+      "fuente": "Medidores Landis",
+      "nota_alcance": "Con datos de feb–may 2026 la ventana móvil de 4 semanas es viable, pero cae dentro de un solo semestre académico. Al cruzar vacaciones el 'esperado' se contamina: marcar los días de receso o excluirlos del agrupador antes de emitir veredicto. Los festivos colombianos se tratan como domingo."
+    },
+    {
+      "id": "PCT",
+      "nombre": "Percentiles de carga (P90 / P95)",
+      "formula": "P90 = percentil 90 de activepower del bloque en el mes; P95 = percentil 95, ambos sobre la serie horaria de potencia",
+      "explicacion": "Define la banda de comportamiento normal de la carga. Un punto por encima de P95 es un consumo inusual, no una lectura alta cualquiera.",
+      "variables": [
+        "activepower"
+      ],
+      "fuente": "Medidores Landis",
+      "nota_alcance": "Es una banda descriptiva, no un umbral de gestión: no se le aplica la regla media ± 1σ ni entra en el semáforo de estado. Se calcula mensual por bloque y no por hora del día, porque el esquema de salida (una fila = indicador·bloque·fecha·mes·valor) no tiene dimensión de hora; la versión perfilada por hora exigiría una columna nueva y rompería el formato que lee el dashboard."
+    },
+    {
+      "id": "PART",
+      "nombre": "Participación en el consumo submedido",
+      "formula": "PART_bloque [%] = Σ(E_bloque del mes) / Σ(E de los 16 medidores en el mes) × 100",
+      "explicacion": "Muestra cuánto aporta cada bloque al consumo que hoy sí está medido. Ordena a qué bloque conviene atender primero.",
+      "variables": [
+        "activeenergyimport"
+      ],
+      "fuente": "Medidores Landis",
+      "nota_alcance": "El denominador es lo SUBMEDIDO (16 medidores), nunca el campus completo: sin la frontera EPM no se conoce el total. Todo reporte debe decir 'del consumo medido', porque un bloque con 28 % de lo medido puede ser una fracción mucho menor del campus real."
+    },
+    {
+      "id": "PERS",
+      "nombre": "Persistencia de la desviación",
+      "formula": "PERS = número de días con DDCE_d > 0 dentro de los últimos 7 días, por bloque",
+      "explicacion": "Distingue un pico aislado de un problema instalado. Prioriza la atención: 5 de 7 días desviados es una condición, no un evento.",
+      "variables": [
+        "activeenergyimport"
+      ],
+      "fuente": "Medidores Landis",
+      "nota_alcance": "Depende por completo de DDCE_D; si un día no tiene base suficiente se excluye del conteo y se reporta el denominador efectivo (p. ej. 4 de 6), nunca se asume como día normal."
+    },
+    {
+      "id": "VER",
+      "nombre": "Valor económico de referencia",
+      "formula": "VER [COP] = Σ(E_mes [kWh]) × tarifa_ref, con tarifa_ref = 600 COP/kWh",
+      "explicacion": "Traduce el consumo o la desviación energética a pesos, para conversaciones con decisión presupuestal.",
+      "variables": [
+        "activeenergyimport"
+      ],
+      "fuente": "Medidores Landis + parámetro tarifario",
+      "nota_alcance": "DEMO_MODE: tarifa_ref = 600 COP/kWh es un valor de referencia, no la tarifa facturada a la UPB — no incluye componentes variables ni contribución/exención. Aplica la convención del proyecto: panel ámbar, sufijo '⚠ Valor de referencia' y tooltip declarando la tarifa usada. Pasa a REAL cuando llegue la factura EPM."
+    },
+    {
+      "id": "CSE",
+      "nombre": "Cobertura de submedición",
+      "formula": "CSE [%] = Σ(E de los 16 medidores en el mes) / E_frontera_EPM del mes × 100",
+      "explicacion": "Indica qué porcentaje del consumo total del campus está siendo medido por el sistema de submedición. Acota la validez de todo indicador que use el consumo medido como denominador.",
+      "variables": [
+        "activeenergyimport",
+        "E_frontera_EPM"
+      ],
+      "fuente": "Medidores Landis + frontera EPM",
+      "nota_alcance": "PENDIENTE: requiere la serie de la frontera EPM, la misma fuente que bloquea a KPI 04. El notebook trae el bloque implementado y en espera: lee 'frontera_epm.csv' con columnas fecha y E_frontera_kwh; mientras el archivo no exista emite PENDIENTE y no calcula. El contrato de entrada es mínimo a propósito — el esquema real de EPM aún no se conoce, y asumirlo sería inventar la validación."
+    },
+    {
+      "id": "CORR_FS",
+      "nombre": "Correlación frontera – submedición",
+      "formula": "CORR_FS = coeficiente de Pearson entre la serie diaria de E_frontera_EPM y la serie diaria de Σ(E de los 16 medidores), calculado por mes",
+      "explicacion": "Evalúa si los cambios en los medidores del sistema de submedición explican las variaciones del consumo total del campus. Valida que la submedición sea representativa antes de usarla para decidir.",
+      "variables": [
+        "activeenergyimport",
+        "E_frontera_EPM"
+      ],
+      "fuente": "Medidores Landis + frontera EPM",
+      "nota_alcance": "PENDIENTE: misma dependencia que CSE. Correlación no es cobertura: un mes puede correlacionar alto (r≈0,95) con cobertura baja si lo no medido varía en proporción a lo medido. Reportar siempre junto a CSE y junto al número de días pareados, porque con menos de 10 el coeficiente es ruido."
     }
   ],
   "kpis": [
