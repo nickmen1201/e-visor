@@ -1657,50 +1657,59 @@ with tab_ind:
     st.markdown("## DDCE — Desviación del consumo esperado (diaria)")
     _d16 = _dev('IND-16')
     if not _d16.empty:
-        # Mapa bloque × día en lugar de una barra por día: promediar porcentajes de
-        # bloques de 6 kWh y de 1 200 kWh con el mismo peso no describe al campus, y
-        # esconde qué bloque se desvió. Los días sin evaluar quedan en blanco.
-        _piv16 = _d16.pivot_table(index='bloque_lbl', columns='fecha',
-                                  values='valor_num', aggfunc='mean')
-        _piv16 = _piv16.reindex(columns=pd.date_range(_piv16.columns.min(),
-                                                      _piv16.columns.max(), freq='D'))
-        _nat = lambda b: (0, int(b[1:])) if b[1:].isdigit() else (1, b)
-        _piv16 = _piv16.loc[sorted(_piv16.index, key=_nat, reverse=True)]
-        _TOPE16 = 60   # la escala satura aquí; el valor real va en el detalle
-        fig16 = go.Figure(go.Heatmap(
-            z=_piv16.values.clip(-_TOPE16, _TOPE16), x=_piv16.columns, y=_piv16.index,
-            customdata=_piv16.values,
-            zmin=-_TOPE16, zmid=0, zmax=_TOPE16,
-            colorscale=[[0.0, C_BLUE], [0.5, '#EEF1F5'], [1.0, C_RED]],
-            xgap=1, ygap=1, hoverongaps=False,
-            colorbar=dict(title=dict(text='vs. esperado', font=dict(size=11, color=INK2)),
-                          tickvals=[-60, -30, 0, 30, 60],
-                          ticktext=['≤ −60 %', '−30 %', '0', '+30 %', '≥ +60 %'],
-                          tickfont=dict(size=10, color=INK2), thickness=12),
-            hovertemplate='%{y} · %{x|%a %d %b}: %{customdata:+.1f} %<extra></extra>',
-        ))
-        fig16.update_layout(
-            title=dict(text='IND-16 — Desviación diaria sobre lo esperado, por bloque',
-                       font=dict(size=13), x=0),
-            xaxis_title='', yaxis_title='',
-        )
-        fig16.update_yaxes(rangemode='normal')
-        _chart(_layout_base(fig16, h=max(320, 26 * len(_piv16) + 140)),
-               use_container_width=True)
+        # Una barra por día. Con varios bloques la barra es la MEDIANA entre ellos,
+        # no el promedio: el promedio da el mismo peso a Ecovilla (6 kWh/día) que a
+        # B9 (1 800 kWh/día) y un solo bloque desbocado lo arrastra hacia arriba.
+        # El bloque que más se desvió ese día va en el detalle.
         _v16 = _d16.dropna(subset=['valor_num'])
-        _sobre = int((_v16['valor_num'] > 0).sum())
-        _altos = _v16[_v16['valor_num'] >= 50].sort_values('valor_num', ascending=False)
-        _top16 = ', '.join(f"{r.bloque_lbl} el {pd.Timestamp(r.fecha):%d/%m} "
-                           f"({r.valor_num:+.0f} %)" for r in _altos.head(3).itertuples())
+        _g16 = _v16.groupby('fecha')
+        _s16 = _g16['valor_num'].median().sort_index()
+        _alto16 = _v16.loc[_g16['valor_num'].idxmax()].set_index('fecha').reindex(_s16.index)
+        _bajo16 = _v16.loc[_g16['valor_num'].idxmin()].set_index('fecha').reindex(_s16.index)
+        _varios = _v16['bloque_lbl'].nunique() > 1
+        _cd16 = np.column_stack([_alto16['bloque_lbl'], _alto16['valor_num'],
+                                 _bajo16['bloque_lbl'], _bajo16['valor_num']])
+        fig16 = go.Figure(go.Bar(
+            x=_s16.index, y=_s16.values,
+            marker_color=[C_RED if v > 0 else C_BLUE for v in _s16.values],
+            marker_line_width=0, customdata=_cd16,
+            hovertemplate=(
+                '<b>%{x|%a %d %b}</b>: %{y:+.1f} %' +
+                ('<br>Más alto: %{customdata[0]} (%{customdata[1]:+.0f} %)'
+                 '<br>Más bajo: %{customdata[2]} (%{customdata[3]:+.0f} %)'
+                 if _varios else '') + '<extra></extra>'),
+        ))
+        fig16.add_hline(y=0, line_color=C_GRAY, line_width=1.5)
+        fig16.update_layout(
+            title=dict(text='IND-16 — Desviación diaria sobre lo esperado' +
+                            (' (bloque típico)' if _varios else ''),
+                       font=dict(size=13), x=0),
+            xaxis_title='', yaxis_title='Desviación (%)', bargap=0.25,
+        )
+        fig16.update_yaxes(rangemode='normal', ticksuffix=' %')
+        _chart(_layout_base(fig16, h=320), use_container_width=True)
+        _sobre = int((_s16 > 0).sum())
+        _frac16 = _sobre / len(_s16)
+        # Con un esperado de mediana, lo neutro es ~50 % de días arriba. Si se
+        # aleja, el consumo viene cambiando más rápido que su base de 4 semanas
+        _lect16 = ("cerca de la mitad, lo normal con un esperado de mediana"
+                   if 0.4 <= _frac16 <= 0.6 else
+                   "más de la mitad: el consumo viene subiendo más rápido que su base "
+                   "de 4 semanas" if _frac16 > 0.6 else
+                   "menos de la mitad: el consumo viene bajando más rápido que su base "
+                   "de 4 semanas")
+        _top16 = ', '.join(
+            f"{pd.Timestamp(f):%d/%m} ({v:+.0f} %, liderado por {_alto16.at[f, 'bloque_lbl']})"
+            for f, v in _s16.sort_values(ascending=False).head(3).items())
         st.caption(
             f"Mismo contraste que el horario, con el día ya cerrado. Rojo es gastar más de "
-            f"lo esperado, azul menos; la escala satura en ±{_TOPE16} %. En el período, "
-            f"**{_sobre} de {len(_v16)} bloque-días** cerraron por encima: que ronde la "
-            f"mitad es lo correcto, porque el esperado es una mediana. Lo que se vigila es "
-            f"la **magnitud** y la **repetición**: **{len(_altos)}** bloque-días superaron "
-            f"el +50 %" + (f", los mayores {_top16}" if _top16 else "") + ". Una celda en "
-            f"blanco es un día que no se evalúa — sin datos, con menos de 24 horas "
-            f"cargadas (cortes de ingesta) o sin base suficiente — y nunca se asume normal."
+            f"lo esperado, azul menos"
+            + (". Cada barra es el **bloque típico** del día (la mediana entre bloques); "
+               "el detalle dice cuál se desvió más" if _varios else "")
+            + f". **{_sobre} de {len(_s16)} días** cerraron por encima, {_lect16}. "
+            f"Los días más altos: "
+            f"{_top16}. Los huecos son días que no se evalúan — sin datos, con menos de 24 "
+            f"horas cargadas (cortes de ingesta) o sin base suficiente."
         )
     else:
         st.info("IND-16 (DDCE diaria) sin datos para el rango seleccionado.")
