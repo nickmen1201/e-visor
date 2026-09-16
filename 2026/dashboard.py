@@ -483,6 +483,13 @@ def cargar_datos():
     # percentil) y lo relativo se promedia (desviaciones %, días de persistencia).
     _AGG_DEV = {'IND-15': 'mean', 'IND-16': 'mean', 'IND-17': 'sum',
                 'IND-18': 'sum',  'IND-19': 'mean', 'IND-20': 'sum'}
+    # IND-15 queda fuera de la fusión: es horario pero llega solo con fecha, así
+    # que agrupar por fecha promediaría las 24 horas del día en un valor y la
+    # distribución horaria de B9 se volvería una de medias diarias. Sus horas se
+    # juntan tal cual bajo B9.
+    _b9_h15 = ind_dev['bloque'].isin(['9.1', '9.2']) & (ind_dev['indicador'] == 'IND-15')
+    ind_dev.loc[_b9_h15, 'bloque'] = 9
+    ind_dev.loc[_b9_h15, 'entity_id'] = 'SmartMeter_SM_B9'
     _b9_dev = ind_dev['bloque'].isin(['9.1', '9.2'])
     if _b9_dev.any():
         _g9 = (ind_dev[_b9_dev]
@@ -1578,39 +1585,70 @@ with tab_ind:
     st.markdown("## DDCE — Desviación del consumo esperado (horaria)")
     _d15 = _dev('IND-15')
     if not _d15.empty:
-        # Caja por bloque: la posición de la mediana dice si el esperado está
-        # bien calibrado y el ancho dice cuánto oscila el bloque hora a hora.
-        _ord15 = (_d15.groupby('bloque_lbl')['valor_num'].median()
-                  .sort_values().index.tolist())
+        # Banda por bloque dibujada con percentiles, no con go.Box: sin puntos, los
+        # bigotes de Plotly llegan al mínimo y al máximo, y un solo +1 000 % aplasta
+        # todas las cajas contra el cero. La desviación relativa no tiene techo
+        # (esperados de 0,3 kWh de noche la disparan), así que se muestra P5–P95.
+        _q15 = (_d15.groupby('bloque_lbl')['valor_num']
+                .quantile([0.05, 0.25, 0.50, 0.75, 0.95]).unstack())
+        _q15.columns = ['p05', 'p25', 'p50', 'p75', 'p95']
+        _q15['n'] = _d15.groupby('bloque_lbl')['valor_num'].count()
+        # El más volátil arriba: es el que menos se deja leer hora a hora
+        _q15 = _q15.assign(_ancho=_q15['p95'] - _q15['p05']).sort_values('_ancho')
+        _y15 = _q15.index.tolist()
+        _cd15 = _q15[['p05', 'p25', 'p50', 'p75', 'p95', 'n']].values
+        _hov15 = ('<b>%{y}</b> · %{customdata[5]:,} horas<br>'
+                  'P5–P95: %{customdata[0]:+.0f} % a %{customdata[4]:+.0f} %<br>'
+                  'P25–P75: %{customdata[1]:+.0f} % a %{customdata[3]:+.0f} %<br>'
+                  'Mediana: %{customdata[2]:+.1f} %<extra></extra>')
         fig15 = go.Figure()
-        for _b in _ord15:
-            fig15.add_trace(go.Box(
-                x=_d15[_d15['bloque_lbl'] == _b]['valor_num'],
-                name=_b, orientation='h', boxpoints=False,
-                marker_color=C_BLUE, line=dict(width=1.4), fillcolor='#E7EEF8',
-                hovertemplate='%{y}: %{x:.1f}%<extra></extra>',
-            ))
-        fig15.add_vline(x=0, line_color=C_GRAY, line_dash='dot', line_width=1.5,
-                        annotation_text='0 % = consumo esperado',
-                        annotation_position='top right',
-                        annotation_font_color=C_GRAY, annotation_font_size=10)
+        fig15.add_trace(go.Bar(
+            y=_y15, x=_q15['p95'] - _q15['p05'], base=_q15['p05'], orientation='h',
+            width=0.18, marker_color=C_BLUE, opacity=0.35, marker_line_width=0,
+            name='P5–P95 (9 de cada 10 horas)', customdata=_cd15, hovertemplate=_hov15,
+        ))
+        fig15.add_trace(go.Bar(
+            y=_y15, x=_q15['p75'] - _q15['p25'], base=_q15['p25'], orientation='h',
+            width=0.55, marker_color=C_BLUE, marker_line_width=0,
+            name='P25–P75 (la mitad de las horas) · raya blanca = mediana',
+            customdata=_cd15, hovertemplate=_hov15,
+        ))
+        # La raya blanca no se ve en la leyenda, así que la nombra la barra gruesa
+        fig15.add_trace(go.Scatter(
+            y=_y15, x=_q15['p50'], mode='markers', showlegend=False,
+            marker=dict(symbol='line-ns', size=16, line=dict(width=3, color='#FFFFFF')),
+            name='Mediana', customdata=_cd15, hovertemplate=_hov15,
+        ))
+        fig15.add_vline(x=0, line_color=C_GRAY, line_dash='dot', line_width=1.5)
+        _xmax15 = max(50.0, float(np.ceil(_q15['p95'].max() / 25.0) * 25.0))
         fig15.update_layout(
-            title=dict(text='IND-15 — Distribución de la desviación horaria por bloque',
+            barmode='overlay', bargap=0.3,
+            title=dict(text='IND-15 — Cuánto se aparta cada hora de lo esperado, por bloque',
                        font=dict(size=13), x=0),
-            xaxis_title='Desviación sobre lo esperado (%)', showlegend=False,
+            xaxis_title='Desviación sobre lo esperado (%) · 0 = consumo esperado',
+            legend=dict(orientation='h', yanchor='top', y=-0.14, xanchor='left', x=0,
+                        font=dict(size=11)),
         )
+        fig15.update_xaxes(range=[-100, _xmax15], ticksuffix=' %', zeroline=False)
         fig15.update_yaxes(rangemode='normal')
-        _chart(_layout_base(fig15, h=max(320, 30 * len(_ord15) + 130)),
-               use_container_width=True)
+        _layout_base(fig15, h=max(340, 34 * len(_y15) + 150))
+        fig15.update_layout(margin=dict(t=48, b=90, l=80, r=24))
+        _chart(fig15, use_container_width=True)
         _med15 = float(_d15['valor_num'].median())
+        _ult15 = pd.Timestamp(_d15['fecha'].max())
+        _vol15 = _q15.index[-1]
         st.caption(
             f"Cada hora se compara contra la **mediana de esa misma hora y ese mismo tipo "
             f"de día** en las 4 semanas previas (hábil / sábado / domingo-festivo). La "
-            f"mediana general del período es **{_med15:+.1f} %**: cuanto más cerca de cero, "
-            f"mejor calibrado está el esperado — es la señal de que el indicador mide "
-            f"consumo y no calendario. El ancho de cada caja es la volatilidad propia del "
-            f"bloque, no un error. La ficha lo llama *tiempo real*; aquí es la última hora "
-            f"cargada, porque el pipeline no tiene ingesta continua."
+            f"barra gruesa contiene la mitad de las horas y la delgada nueve de cada diez; "
+            f"el 10 % más extremo queda fuera a propósito. La mediana general es "
+            f"**{_med15:+.1f} %**: cerca de cero significa que el esperado está bien "
+            f"calibrado. El ancho es la volatilidad propia del bloque — **{_vol15}** es el "
+            f"más irregular — y crece donde el consumo nocturno es tan pequeño que unos "
+            f"pocos kWh ya son un porcentaje enorme. Las horas que siguen a un corte de "
+            f"ingesta o a la vuelta del contador no se evalúan. La ficha lo llama *tiempo "
+            f"real*; el último día cargado es el **{_ult15:%d/%m/%Y}**, porque el pipeline "
+            f"no tiene ingesta continua."
         )
     else:
         st.info("IND-15 (DDCE horaria) sin datos para el rango seleccionado.")
@@ -1619,29 +1657,50 @@ with tab_ind:
     st.markdown("## DDCE — Desviación del consumo esperado (diaria)")
     _d16 = _dev('IND-16')
     if not _d16.empty:
-        _s16 = _d16.groupby('fecha')['valor_num'].mean().sort_index()
-        fig16 = go.Figure(go.Bar(
-            x=_s16.index, y=_s16.values,
-            marker_color=[C_RED if v > 0 else C_TEAL for v in _s16.values],
-            marker_line_width=0,
-            hovertemplate='%{x|%d %b}: %{y:+.1f}%<extra></extra>',
+        # Mapa bloque × día en lugar de una barra por día: promediar porcentajes de
+        # bloques de 6 kWh y de 1 200 kWh con el mismo peso no describe al campus, y
+        # esconde qué bloque se desvió. Los días sin evaluar quedan en blanco.
+        _piv16 = _d16.pivot_table(index='bloque_lbl', columns='fecha',
+                                  values='valor_num', aggfunc='mean')
+        _piv16 = _piv16.reindex(columns=pd.date_range(_piv16.columns.min(),
+                                                      _piv16.columns.max(), freq='D'))
+        _nat = lambda b: (0, int(b[1:])) if b[1:].isdigit() else (1, b)
+        _piv16 = _piv16.loc[sorted(_piv16.index, key=_nat, reverse=True)]
+        _TOPE16 = 60   # la escala satura aquí; el valor real va en el detalle
+        fig16 = go.Figure(go.Heatmap(
+            z=_piv16.values.clip(-_TOPE16, _TOPE16), x=_piv16.columns, y=_piv16.index,
+            customdata=_piv16.values,
+            zmin=-_TOPE16, zmid=0, zmax=_TOPE16,
+            colorscale=[[0.0, C_BLUE], [0.5, '#EEF1F5'], [1.0, C_RED]],
+            xgap=1, ygap=1, hoverongaps=False,
+            colorbar=dict(title=dict(text='vs. esperado', font=dict(size=11, color=INK2)),
+                          tickvals=[-60, -30, 0, 30, 60],
+                          ticktext=['≤ −60 %', '−30 %', '0', '+30 %', '≥ +60 %'],
+                          tickfont=dict(size=10, color=INK2), thickness=12),
+            hovertemplate='%{y} · %{x|%a %d %b}: %{customdata:+.1f} %<extra></extra>',
         ))
-        fig16.add_hline(y=0, line_color=C_GRAY, line_width=1.5)
         fig16.update_layout(
-            title=dict(text='IND-16 — Desviación diaria sobre lo esperado',
+            title=dict(text='IND-16 — Desviación diaria sobre lo esperado, por bloque',
                        font=dict(size=13), x=0),
-            xaxis_title='Fecha', yaxis_title='Desviación (%)',
+            xaxis_title='', yaxis_title='',
         )
         fig16.update_yaxes(rangemode='normal')
-        _chart(_layout_base(fig16, h=320), use_container_width=True)
-        _sobre = int((_s16 > 0).sum())
+        _chart(_layout_base(fig16, h=max(320, 26 * len(_piv16) + 140)),
+               use_container_width=True)
+        _v16 = _d16.dropna(subset=['valor_num'])
+        _sobre = int((_v16['valor_num'] > 0).sum())
+        _altos = _v16[_v16['valor_num'] >= 50].sort_values('valor_num', ascending=False)
+        _top16 = ', '.join(f"{r.bloque_lbl} el {pd.Timestamp(r.fecha):%d/%m} "
+                           f"({r.valor_num:+.0f} %)" for r in _altos.head(3).itertuples())
         st.caption(
-            f"Mismo contraste que el horario, con el día ya cerrado. En el período "
-            f"seleccionado **{_sobre} de {len(_s16)} días** cerraron por encima de lo "
-            f"esperado. Que el reparto ronde la mitad es lo correcto: el esperado es una "
-            f"mediana, así que por construcción la mitad de los días debería quedar "
-            f"arriba. Lo que se vigila no es el signo de un día suelto sino su "
-            f"**magnitud** y su **repetición**, que es lo que mide la persistencia."
+            f"Mismo contraste que el horario, con el día ya cerrado. Rojo es gastar más de "
+            f"lo esperado, azul menos; la escala satura en ±{_TOPE16} %. En el período, "
+            f"**{_sobre} de {len(_v16)} bloque-días** cerraron por encima: que ronde la "
+            f"mitad es lo correcto, porque el esperado es una mediana. Lo que se vigila es "
+            f"la **magnitud** y la **repetición**: **{len(_altos)}** bloque-días superaron "
+            f"el +50 %" + (f", los mayores {_top16}" if _top16 else "") + ". Una celda en "
+            f"blanco es un día que no se evalúa — sin datos, con menos de 24 horas "
+            f"cargadas (cortes de ingesta) o sin base suficiente — y nunca se asume normal."
         )
     else:
         st.info("IND-16 (DDCE diaria) sin datos para el rango seleccionado.")
