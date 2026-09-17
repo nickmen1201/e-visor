@@ -476,10 +476,9 @@ def cargar_datos():
     ind_dev['entity_id'] = ind_dev['bloque'].map(_entity_id_for)
 
     # B9.1 + B9.2 → B9, igual que el resto del tablero. La regla de combinación
-    # depende de la magnitud: lo aditivo se suma (participación, pesos, kW de
-    # percentil) y lo relativo se promedia (desviaciones %, días de persistencia).
-    _AGG_DEV = {'IND-15': 'mean', 'IND-16': 'mean', 'IND-17': 'sum',
-                'IND-18': 'sum',  'IND-19': 'mean', 'IND-20': 'sum'}
+    # depende de la magnitud: lo aditivo se suma (participación, pesos) y lo
+    # relativo se promedia (desviaciones %).
+    _AGG_DEV = {'IND-15': 'mean', 'IND-16': 'mean', 'IND-18': 'sum', 'IND-20': 'sum'}
     # IND-15 queda fuera de la fusión: es horario pero llega solo con fecha, así
     # que agrupar por fecha promediaría las 24 horas del día en un valor y la
     # distribución horaria de B9 se volvería una de medias diarias. Sus horas se
@@ -487,7 +486,10 @@ def cargar_datos():
     _b9_h15 = ind_dev['bloque'].isin(['9.1', '9.2']) & (ind_dev['indicador'] == 'IND-15')
     ind_dev.loc[_b9_h15, 'bloque'] = 9
     ind_dev.loc[_b9_h15, 'entity_id'] = 'SmartMeter_SM_B9'
-    _b9_dev = ind_dev['bloque'].isin(['9.1', '9.2'])
+    # IND-17 e IND-19 tampoco se fusionan: el percentil de la suma no es la suma
+    # de los percentiles (sumarlos sobreestima 3-5 %), y promediar días de
+    # persistencia da valores imposibles como 4,5 de 7. Van por submedidor.
+    _b9_dev = ind_dev['bloque'].isin(['9.1', '9.2']) & ind_dev['indicador'].isin(list(_AGG_DEV))
     if _b9_dev.any():
         _g9 = (ind_dev[_b9_dev]
                .groupby(['indicador', 'descripcion', 'fecha', 'mes', 'unidad'],
@@ -1071,7 +1073,9 @@ if seleccion != "Todos":
     ind_f = ind_f[ind_f['entity_id'] == seleccion]
     kpi_f = kpi_f[kpi_f['entity_id'] == seleccion]
     if not ind_dev_f.empty:
-        ind_dev_f = ind_dev_f[ind_dev_f['entity_id'] == seleccion]
+        # IND-17 e IND-19 van por submedidor: 'B9 SFA1' pertenece al bloque 'B9'
+        ind_dev_f = ind_dev_f[ind_dev_f['entity_id'].map(lambda e: _bloque_label(e).split(' ')[0])
+                              == _bloque_label(seleccion)]
     # KPI-08 va por submedidor: 'B9 SFA1' pertenece al bloque 'B9'
     kpi08_f = kpi08_f[kpi08_f['entity_id'].map(lambda e: _bloque_label(e).split(' ')[0])
                       == _bloque_label(seleccion)]
@@ -1721,11 +1725,13 @@ with tab_ind:
                use_container_width=True)
         st.caption(
             "El P90 y el P95 marcan el techo habitual de cada bloque: solo el 10 % y el "
-            "5 % de las horas del mes lo superan. Sirven para decir que una lectura es "
-            "**inusual** y no apenas alta, y para dimensionar sin quedar preso del pico "
-            "absoluto, que suele ser un evento único. Es descriptivo: no lleva umbral ni "
-            "semáforo. Se calcula mensual por bloque, no por hora del día, porque el "
-            "formato de salida no tiene esa dimensión."
+            "5 % de las horas del mes lo superan. Sirven para dimensionar sin quedar preso "
+            "del pico absoluto, que suele ser un evento único. **No detectan anomalías**: "
+            "las horas que superan el P95 son las de mediodía en días hábiles, y un consumo "
+            "nocturno anómalo nunca llega a superarlo — eso lo detecta el DDCE. Es "
+            "descriptivo: no lleva umbral ni semáforo. Se calcula mensual por bloque, no por "
+            "hora del día, porque el formato de salida no tiene esa dimensión. B9 aparece "
+            "como sus dos submedidores porque los percentiles no se pueden sumar."
         )
     else:
         st.info("IND-17 (percentiles) sin datos para el rango seleccionado.")
@@ -1783,9 +1789,11 @@ with tab_ind:
                use_container_width=True)
         _max19 = float(_d19['valor_num'].max())
         st.caption(
-            f"Lo que separa un pico de un problema instalado. Una franja roja continua es "
-            f"un bloque que lleva días gastando de más: eso se atiende, un día suelto no. "
-            f"El máximo alcanzado en el período es **{_max19:.0f} de 7 días**. Solo se "
+            f"Cuántos de los últimos 7 días el bloque cerró por encima de lo esperado. Como "
+            f"el esperado es una mediana, lo neutro es 3 o 4: por azar, 5 o más de 7 pasa en "
+            f"cerca de una de cada cuatro ventanas, así que solo las rachas de **6 o 7 días** "
+            f"apuntan a un cambio sostenido. El máximo alcanzado en el período es "
+            f"**{_max19:.0f} de 7 días**. Solo se "
             f"pintan ventanas completas — un día sin base suficiente en el DDCE no cuenta "
             f"como día normal, sale del numerador y del denominador — así que el "
             f"denominador siempre es 7 y las celdas son comparables entre sí."

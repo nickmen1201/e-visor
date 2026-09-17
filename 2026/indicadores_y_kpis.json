@@ -145,18 +145,18 @@
     {
       "id": "DDCE_H",
       "nombre": "Desviación del consumo esperado (horaria)",
-      "formula": "DDCE_h [%] = (E_observada_h − E_esperada_h) / E_esperada_h × 100, con E_esperada_h = mediana de la energía del bloque en esa misma hora y tipo de día durante las 4 semanas previas",
-      "explicacion": "Compara el consumo de la última hora disponible contra el comportamiento típico del bloque a esa hora. Detecta desviaciones mientras aún se pueden corregir.",
+      "formula": "DDCE_h [%] = (E_observada_h − E_esperada_h) / E_esperada_h × 100, con E_esperada_h = mediana de la energía del bloque en esa misma hora y tipo de día en las observaciones previas de ese mismo tipo de día: 20 días hábiles, 4 sábados o 4 domingos-festivos (≈ 4 semanas). Con menos de 3 observaciones no se emite desviación",
+      "explicacion": "Compara el consumo de cada hora contra el comportamiento típico del bloque a esa misma hora y en ese mismo tipo de día. Muestra qué bloques se apartan de lo esperado y con qué dispersión.",
       "variables": [
         "activeenergyimport"
       ],
       "fuente": "Medidores Landis",
-      "nota_alcance": "La ficha original lo llama 'tiempo real'; con el pipeline actual no hay ingesta continua, así que se calcula sobre la última hora cargada. El tipo de día (hábil / sábado / domingo-festivo) es obligatorio en el agrupador: sin él un lunes se compara contra domingos y la desviación es un artefacto del calendario. La mediana se usa en vez del promedio para que un pico aislado de la base no arrastre el esperado."
+      "nota_alcance": "La ficha original lo llama 'tiempo real'; con el pipeline actual no hay ingesta continua, así que se calcula para todas las horas cargadas; el formato de salida solo conserva la fecha, por lo que el tablero muestra la distribución horaria del período y no una hora puntual. El tipo de día (hábil / sábado / domingo-festivo) es obligatorio en el agrupador: sin él un lunes se compara contra domingos y la desviación es un artefacto del calendario. La mediana se usa en vez del promedio para que un pico aislado de la base no arrastre el esperado."
     },
     {
       "id": "DDCE_D",
       "nombre": "Desviación del consumo esperado (diaria)",
-      "formula": "DDCE_d [%] = (E_observada_d − E_esperada_d) / E_esperada_d × 100, con E_esperada_d = mediana de la energía diaria del mismo tipo de día durante las 4 semanas previas",
+      "formula": "DDCE_d [%] = (E_observada_d − E_esperada_d) / E_esperada_d × 100, con E_esperada_d = mediana de la energía diaria del mismo tipo de día en las observaciones previas de ese mismo tipo de día: 20 días hábiles, 4 sábados o 4 domingos-festivos (≈ 4 semanas). Con menos de 3 observaciones no se emite desviación",
       "explicacion": "Cierra el día contra lo esperado. Es la versión de seguimiento histórico del DDCE, la que alimenta el reporte de gestión y la persistencia.",
       "variables": [
         "activeenergyimport"
@@ -168,7 +168,7 @@
       "id": "PCT",
       "nombre": "Percentiles de carga (P90 / P95)",
       "formula": "P90 = percentil 90 de activepower del bloque en el mes; P95 = percentil 95, ambos sobre la serie horaria de potencia",
-      "explicacion": "Define la banda de comportamiento normal de la carga. Un punto por encima de P95 es un consumo inusual, no una lectura alta cualquiera.",
+      "explicacion": "Describe el techo habitual de la carga del bloque en el mes: solo el 10 % y el 5 % de las horas lo superan. Sirve para dimensionar sin depender del pico absoluto (KPI 03). No detecta anomalías: al mezclar todas las horas del mes, las que superan el P95 son las de mediodía en días hábiles, y un consumo nocturno anómalo nunca llega a superarlo; esa detección la hace el DDCE.",
       "variables": [
         "activepower"
       ],
@@ -190,18 +190,18 @@
       "id": "PERS",
       "nombre": "Persistencia de la desviación",
       "formula": "PERS = número de días con DDCE_d > 0 dentro de los últimos 7 días, por bloque",
-      "explicacion": "Distingue un pico aislado de un problema instalado. Prioriza la atención: 5 de 7 días desviados es una condición, no un evento.",
+      "explicacion": "Resume cuántos de los últimos 7 días el bloque cerró por encima de lo esperado. Como el esperado es una mediana, el valor neutro está entre 3 y 4: por azar, 5 o más de 7 ocurre en cerca del 23 % de las ventanas y 6 o más en cerca del 6 %, así que solo las rachas de 6 o 7 días apuntan a un cambio sostenido.",
       "variables": [
         "activeenergyimport"
       ],
       "fuente": "Medidores Landis",
-      "nota_alcance": "Depende por completo de DDCE_D; si un día no tiene base suficiente se excluye del conteo y se reporta el denominador efectivo (p. ej. 4 de 6), nunca se asume como día normal."
+      "nota_alcance": "Depende por completo de DDCE_D; si un día no tiene base suficiente se excluye del conteo, nunca se asume como día normal. Solo se publican ventanas con los 7 días evaluados, así que el denominador siempre es 7; una ventana con algún día sin evaluar no se publica."
     },
     {
       "id": "VER",
       "nombre": "Valor económico de referencia",
       "formula": "VER [COP] = Σ(E_mes [kWh]) × tarifa_ref, con tarifa_ref = 600 COP/kWh",
-      "explicacion": "Traduce el consumo o la desviación energética a pesos, para conversaciones con decisión presupuestal.",
+      "explicacion": "Traduce el consumo mensual del bloque a pesos, para conversaciones con decisión presupuestal.",
       "variables": [
         "activeenergyimport"
       ],
@@ -224,7 +224,7 @@
       "id": "CORR_FS",
       "nombre": "Correlación frontera – submedición",
       "formula": "CORR_FS = coeficiente de Pearson entre la serie diaria de E_frontera_EPM y la serie diaria de Σ(E de los 16 medidores), calculado por mes",
-      "explicacion": "Evalúa si los cambios en los medidores del sistema de submedición explican las variaciones del consumo total del campus. Valida que la submedición sea representativa antes de usarla para decidir.",
+      "explicacion": "Mide si la serie diaria de los medidores sube y baja al mismo ritmo que la de la frontera. Es una señal complementaria, no una validación de representatividad: las dos series comparten el ciclo semanal del campus, así que la correlación sale alta incluso con cobertura baja. Se lee siempre junto a CSE.",
       "variables": [
         "activeenergyimport",
         "E_frontera_EPM"

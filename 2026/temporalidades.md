@@ -24,11 +24,11 @@
 | **Ahorro** | Ahorro de energía | Mensual · por bloque | Sin umbral fijo | — | ⚠ PENDIENTE · requiere línea base ≥ 12 meses |
 | **VU** | Desbalance de tensión | Horaria → media diaria · por medidor | Objetivo < 2 % · alerta ≥ 3 % (directriz e-Visor, compartida con KPI 10) | Barra por bloque + barra diaria | Referencia: IEEE 1159:2019 · NTC 5001 |
 | **FD** | Factor de diversidad | Mensual · campus completo | Sin umbral fijo | Serie mensual de campus | Exige timestamps alineados entre los 16 medidores |
-| **DDCE_H** | Desviación del consumo esperado (horaria) | Horaria · por bloque | Sin umbral fijo · base móvil de 4 semanas del mismo tipo de día | Serie horaria + tarjeta de la última hora cargada | Esperado = mediana, no promedio · mínimo 3 observaciones de base |
+| **DDCE_H** | Desviación del consumo esperado (horaria) | Horaria · por bloque | Sin umbral fijo · base móvil de 4 semanas del mismo tipo de día | Distribución horaria por bloque (P5–P95, P25–P75, mediana) | Esperado = mediana, no promedio · mínimo 3 observaciones de base |
 | **DDCE_D** | Desviación del consumo esperado (diaria) | Diaria · por bloque | Sin umbral fijo · base móvil de 4 semanas del mismo tipo de día | Barra diaria del bloque típico (mediana entre bloques) · el detalle nombra el bloque más alto y el más bajo | Alimenta a PERS |
-| **PCT** | Percentiles de carga (P90 / P95) | Mensual · por bloque | Descriptivo: sin umbral ni semáforo | Banda sobre el perfil de potencia | Mensual y no por hora del día: el esquema de salida no tiene esa dimensión |
+| **PCT** | Percentiles de carga (P90 / P95) | Mensual · por bloque | Descriptivo: sin umbral ni semáforo | Barras P90 / P95 por bloque · B9 por submedidor | Mensual y no por hora del día: el esquema de salida no tiene esa dimensión |
 | **PART** | Participación en el consumo submedido | Mensual · por bloque | Sin umbral fijo | Dona o barra apilada por bloque | Denominador = los 16 medidores, NO el campus completo |
-| **PERS** | Persistencia de la desviación | Diaria · por bloque · ventana de 7 días | Sin umbral fijo | Tira de los últimos 7 días | Solo se publican ventanas completas (7 de 7 días evaluados) |
+| **PERS** | Persistencia de la desviación | Diaria · por bloque · ventana de 7 días | Sin umbral fijo | Mapa bloque × fecha (días de 7) · B9 por submedidor | Solo se publican ventanas completas (7 de 7 días evaluados) |
 | **VER** | Valor económico de referencia | Mensual · por bloque | Sin umbral fijo | Tarjeta de valor + barra mensual | ⚠ DEMO · tarifa de referencia 600 COP/kWh, no la factura de la UPB |
 | **CSE** | Cobertura de submedición | Mensual · campus completo | Sin umbral fijo | — | ⚠ PENDIENTE · requiere la frontera EPM (`frontera_epm.csv`) |
 | **CORR_FS** | Correlación frontera – submedición | Mensual · campus completo | Sin umbral fijo · mínimo 10 días pareados | — | ⚠ PENDIENTE · requiere la frontera EPM · se reporta siempre junto a CSE |
