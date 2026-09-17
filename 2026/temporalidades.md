@@ -47,7 +47,7 @@
 | **05** | Emisiones CO₂ | Diaria → mensual · total campus | Propio: media + 1σ | Barra mensual + barra diaria | REAL |
 | **06** | Performance Ratio FV | Mensual · solo planta 52,65 kWp (días con franja 06:00–18:00 completa) | Propio: media − 1σ (más es mejor) | Línea mensual de PR con umbral móvil | REAL |
 | **07** | Autosuficiencia solar | Mensual · por campus medido | Propio: media − 1σ · serie de campus (más es mejor) | Barra mensual | REAL · proxy que sobreestima (sin medición de exportación) |
-| **08** | Load Factor | Diaria · por medidor | Propio: media − 1σ por bloque (más es mejor) | Barra por bloque (% días en cumplimiento) | REAL |
+| **08** | Load Factor | Diaria · por medidor | Propio: media − 1σ por bloque (más es mejor) | Barra del último mes por medidor con su umbral propio + tira de estado mensual · B9 por submedidor (SFA1, SFA2) | REAL |
 | **09** | Consumo no operacional | Diaria · por medidor | Propio: media + 1σ por bloque | Barra por bloque | REAL |
 | **10** | Desbalance de tensión | Horaria · por medidor | Fijo (directriz e-Visor): objetivo < 2 % · alerta ≥ 3 % | Tira de calor diaria por medidor | REAL |
 | **11** | Factor de potencia | Horaria · por medidor | Fijo (directriz e-Visor): objetivo ≥ 0,90 · alerta < 0,85 | Serie diaria + tira de calor | REAL |

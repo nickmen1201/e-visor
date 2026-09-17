@@ -101,6 +101,8 @@ AREAS_BLOQUE = {
 # Mapeo entity_id → etiqueta de display
 _ENTITY_TO_LABEL = {
     'SmartMeter_SM_B9':       'B9',
+    'SmartMeter_SM_B9_SFA1':  'B9 SFA1',   # solo KPI-08, que no fusiona B9
+    'SmartMeter_SM_B9_SFA2':  'B9 SFA2',
     'SmartMeter_SM_ECOVILLA': 'Ecovilla',
 }
 
@@ -509,10 +511,20 @@ def cargar_datos():
 
     ind_dev['bloque_lbl'] = ind_dev['entity_id'].map(_bloque_label)
 
-    return ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv, ind_dev
+    # ── KPI-08 con su estado ─────────────────────────────────────────────────
+    # Igual que KPI-06/07: umbral y estado llegan resueltos del notebook. B9 NO
+    # se fusiona: el notebook juzga SFA1 y SFA2 por separado, y un LF promediado
+    # entre los dos no es el LF de B9 ni tiene umbral contra el cual leerse.
+    kpi08 = (kpi_raw[kpi_raw['kpi'] == 'KPI-08']
+             [['bloque_int', 'fecha', 'mes', 'valor_num', 'estado',
+               'umbral_objetivo', 'umbral_alerta', 'n_base']]
+             .dropna(subset=['bloque_int', 'valor_num']).copy())
+    kpi08['entity_id'] = kpi08['bloque_int'].map(_entity_id_for)
+
+    return ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv, ind_dev, kpi08
 
 
-ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv, ind_dev = cargar_datos()
+ind, kpi, raw, kpi_demo, ind13, ind_fv, kpi_fv, ind_dev, kpi08 = cargar_datos()
 
 
 # Estado textual del Excel → color de semáforo. El notebook de cálculo ya
@@ -1058,12 +1070,16 @@ kpi_fv_f = kpi_fv[kpi_fv['fecha'].between(inicio, fin)].copy() if not kpi_fv.emp
 
 ind_dev_f = (ind_dev[ind_dev['fecha'].between(inicio, fin)].copy()
              if not ind_dev.empty else ind_dev)
+kpi08_f = kpi08[(kpi08['mes'] >= inicio_mes) & (kpi08['mes'] <= fin_mes)].copy()
 
 if seleccion != "Todos":
     ind_f = ind_f[ind_f['entity_id'] == seleccion]
     kpi_f = kpi_f[kpi_f['entity_id'] == seleccion]
     if not ind_dev_f.empty:
         ind_dev_f = ind_dev_f[ind_dev_f['entity_id'] == seleccion]
+    # KPI-08 va por submedidor: 'B9 SFA1' pertenece al bloque 'B9'
+    kpi08_f = kpi08_f[kpi08_f['entity_id'].map(lambda e: _bloque_label(e).split(' ')[0])
+                      == _bloque_label(seleccion)]
 
 raw_f = None
 if raw is not None:
@@ -1148,12 +1164,11 @@ if co2_total is not None:
 else:
     _cards.append(_kpi_card('Emisiones CO₂', '—'))
 
-# Load Factor
+# Load Factor — indicador diagnóstico: sin umbral ni semáforo (el juicio es del KPI 08)
 if lf_medio is not None:
-    _e = _estado_from_color(_semaforo(lf_medio, 0.65, 0.50))
     _cards.append(_kpi_card('LF medio diario', f'{lf_medio:.2f}', '',
-                            estado=_e, spark=_sparkline_svg(_sp_lf),
-                            foot='media de LF diarios · obj ≥ 0.65'))
+                            spark=_sparkline_svg(_sp_lf),
+                            foot='media de LF diarios · el estado lo da el KPI 08'))
 else:
     _cards.append(_kpi_card('LF medio diario', '—'))
 
@@ -1213,8 +1228,7 @@ with tab_ind:
              .groupby('bloque')['LF'].mean().sort_values(),
         titulo='IND-01 — Media de los LF diarios por bloque',
         xlabel='Factor de carga diario (0–1)',
-        color_fn=lambda v: _semaforo(v, 0.65, 0.50),
-        ref_lines=[(0.65, C_TEAL, 'objetivo 0.65')],
+        color_fn=lambda v: C_BLUE,
     )
     _chart(fig_lf_bar, use_container_width=True)
     st.caption(
@@ -1223,7 +1237,9 @@ with tab_ind:
         "promedia esos LF diarios; el KPI 08 usa el máximo del **mes**. Como el "
         "máximo mensual es mayor o igual que el de cualquier día, el LF diario "
         "siempre da más alto que el mensual: los dos números no son comparables "
-        "entre sí y ninguno es el LF del período completo."
+        "entre sí y ninguno es el LF del período completo. Es un indicador "
+        "diagnóstico, así que va sin semáforo: el juicio contra un umbral lo emite "
+        "el KPI 08."
     )
     _chart(serie_diaria(ind_f, 'LF', 'LF (adimensional)'), use_container_width=True)
 
@@ -2176,34 +2192,63 @@ with tab_kpi:
 
     # ── KPI 08 — Load Factor ─────────────────────────────────────────────────
     st.markdown("## KPI 08 — Load Factor (mensual)")
-    lf_vals            = kpi_f['KPI08_LF'].dropna()
-    mu_lf              = float(lf_vals.mean()) if len(lf_vals) > 0 else 0.65
-    sigma_lf           = float(lf_vals.std())  if len(lf_vals) > 1 else 0.0
-    umbral_alerta_lf   = max(0.0, mu_lf - sigma_lf)
-    umbral_objetivo_lf = min(1.0, mu_lf * 1.07)
+    # Estado y umbral vienen del notebook (umbral_movil): objetivo = media × 1.07 y
+    # alerta = media − 1σ de los meses PREVIOS del mismo medidor. Recalcularlos
+    # aquí sobre el rango filtrado mezclaría bloques y metería al mes juzgado en
+    # su propia base.
+    if kpi08_f.empty:
+        st.info("KPI 08 sin valores para el período seleccionado.")
+    else:
+        # Cada barra es el último mes del medidor, con SU umbral: un promedio de
+        # varios meses no tiene un umbral único contra el cual leerse.
+        k8 = (kpi08_f.sort_values('fecha').drop_duplicates('entity_id', keep='last')
+                     .sort_values('valor_num').reset_index(drop=True))
+        _NOM_K8 = {'OK': 'cumple', 'AVISO': 'revisar', 'ALERTA': 'alerta',
+                   'SIN_BASE': 'sin base'}
+        _u = lambda v: '—' if pd.isna(v) else f'{v:.3f}'
+        fig_k8 = barras_horizontales(
+            pd.Series(k8['valor_num'].values, index=k8['entity_id'].map(_bloque_label)),
+            titulo='KPI 08 — Load Factor del último mes por bloque y su umbral propio',
+            xlabel='Factor de carga mensual (0–1)', fmt='{:.3f}',
+            colores=[_color_de_estado(e) for e in k8['estado']],
+            customdata=[[f'{_MESES_ABR[f.month - 1]} {f.year}', _u(o), _u(a),
+                         _NOM_K8.get(str(e), str(e)), int(n) if pd.notna(n) else 0]
+                        for f, o, a, e, n in zip(k8['fecha'], k8['umbral_objetivo'],
+                                                 k8['umbral_alerta'], k8['estado'],
+                                                 k8['n_base'])],
+            hover=('<b>%{y}</b> — LF %{x:.3f} (%{customdata[0]})<br>'
+                   'Objetivo: %{customdata[1]} · Alerta (μ−1σ): %{customdata[2]}<br>'
+                   'Estado: %{customdata[3]} · base: %{customdata[4]} meses<extra></extra>'),
+        )
+        # Marcas de umbral por fila, como en el KPI 03: cada medidor tiene el suyo
+        for _i, _r in k8.iterrows():
+            for _v, _c in ((_r['umbral_objetivo'], C_TEAL), (_r['umbral_alerta'], C_RED)):
+                if pd.notna(_v):
+                    fig_k8.add_shape(type='line', xref='x', yref='y',
+                                     x0=_v, x1=_v, y0=_i - 0.34, y1=_i + 0.34,
+                                     line=dict(color=_c, width=2.4), layer='above')
+        _chart(fig_k8, use_container_width=True)
 
-    lf_medio_k8 = kpi_f.groupby('entity_id')['KPI08_LF'].mean().sort_values()
-    lf_medio_k8.index = [_bloque_label(e) for e in lf_medio_k8.index]
+        _est_k8 = {(e, f): c for e, f, c in zip(
+            kpi08_f['entity_id'], kpi08_f['fecha'], kpi08_f['estado'].map(_color_de_estado))}
+        _chart(tira_estado(
+            kpi08_f, 'valor_num', 'KPI 08 — Load Factor', None,
+            'verde ≥ objetivo\nnaranja ≥ μ−1σ\nrojo < μ−1σ\ngris sin base',
+            estado_fn=lambda e, f, v: _est_k8.get((e, f), C_GRAY), fmt='{:.3f}',
+        ), use_container_width=True)
 
-    _chart(barras_horizontales(
-        lf_medio_k8, titulo='KPI 08 — Media de los LF mensuales por bloque',
-        xlabel='Factor de carga mensual (0–1)',
-        color_fn=lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
-        ref_lines=[
-            (umbral_objetivo_lf, C_TEAL, f'objetivo {umbral_objetivo_lf:.3f}'),
-            (umbral_alerta_lf,   C_RED,  f'alerta {umbral_alerta_lf:.3f}'),
-        ],
-    ), use_container_width=True)
-    st.caption(
-        "LF mensual = P̄ del mes / P_máx del mes. No coincide con el IND-01 de la "
-        "pestaña de indicadores, que promedia LF diarios: misma fórmula, ventana "
-        "distinta (ver nota allí)."
-    )
-    _chart(tira_estado(
-        kpi_f, 'KPI08_LF', 'KPI 08 — Load Factor',
-        lambda v: _semaforo(v, umbral_objetivo_lf, umbral_alerta_lf),
-        f'verde ≥ {umbral_objetivo_lf:.3f}\nnaranja ≥ {umbral_alerta_lf:.3f}\nrojo < {umbral_alerta_lf:.3f}',
-    ), use_container_width=True)
+        _n_k8 = k8['estado'].value_counts()
+        st.caption(
+            "LF mensual = P̄ del mes / P_máx del mes. No coincide con el IND-01 de la "
+            "pestaña de indicadores, que promedia LF diarios: misma fórmula, ventana "
+            "distinta (ver nota allí). Umbral propio de cada medidor: objetivo = media "
+            "mejorada un 7 % y alerta = media − 1σ de sus meses anteriores (máx. 12); el "
+            "mes que se juzga no entra en su propia base, y con menos de 4 meses no se "
+            f"emite semáforo. En el último mes: **{_n_k8.get('ALERTA', 0)}** en alerta, "
+            f"**{_n_k8.get('AVISO', 0)}** para revisar, **{_n_k8.get('OK', 0)}** cumplen "
+            f"y **{_n_k8.get('SIN_BASE', 0)}** sin base. B9 aparece como sus dos "
+            "submedidores (SFA1 y SFA2) porque así se evalúan."
+        )
 
     # ── KPI 09 — Consumo no operacional ──────────────────────────────────────
     st.markdown("## KPI 09 — Índice de consumo no operacional")
