@@ -435,19 +435,13 @@ def cargar_datos():
             _rw['entity_id'] = 'SmartMeter_SM_B9'
             raw = pd.concat([raw[~_b9_raw], _rw], ignore_index=True)
 
-    # ── Indicadores FV (IND-08, IND-09, IND-14) ──────────────────────────────
+    # ── Indicadores FV (IND-08, IND-09) ──────────────────────────────────────
     # Se quedan en formato largo, sin pivotar: su 'bloque' vive en otro espacio
     # (plantas FV, no medidores Landis) y no comparten malla diaria con el resto.
-    ind_fv = (ind_raw[ind_raw['indicador'].isin(['IND-08', 'IND-09', 'IND-14'])]
+    ind_fv = (ind_raw[ind_raw['indicador'].isin(['IND-08', 'IND-09'])]
               [['indicador', 'descripcion', 'bloque', 'fecha', 'mes', 'valor_num', 'unidad']]
               .dropna(subset=['valor_num']).copy())
     ind_fv['fecha'] = pd.to_datetime(ind_fv['fecha'], errors='coerce')
-    # IND-14 es mensual y llega sin fecha: se deriva del mes para poder filtrarlo
-    _sin_fecha = ind_fv['fecha'].isna()
-    if _sin_fecha.any():
-        ind_fv.loc[_sin_fecha, 'fecha'] = (
-            pd.to_datetime(ind_fv.loc[_sin_fecha, 'mes'], format='%Y-%m', errors='coerce')
-            + pd.offsets.MonthEnd(0))
 
     # ── KPIs FV (KPI-06, KPI-07) ─────────────────────────────────────────────
     # Se traen los umbrales ya resueltos: el sentido de cada KPI se decide en un
@@ -472,8 +466,7 @@ def cargar_datos():
                [['indicador', 'descripcion', 'bloque', 'fecha', 'mes', 'valor_num', 'unidad']]
                .dropna(subset=['valor_num']).copy())
     ind_dev['fecha']  = pd.to_datetime(ind_dev['fecha'], errors='coerce')
-    # Los mensuales llegan sin fecha: se deriva del mes para poder filtrarlos,
-    # igual que IND-14
+    # Los mensuales llegan sin fecha: se deriva del mes para poder filtrarlos
     _sin_f = ind_dev['fecha'].isna()
     if _sin_f.any():
         ind_dev.loc[_sin_f, 'fecha'] = (
@@ -1554,41 +1547,6 @@ with tab_ind:
         )
     else:
         st.info("IND-09 (TCP) sin datos para el rango seleccionado.")
-
-    # ── IND-14 — DFV (Disponibilidad de capacidad fotovoltaica) ─────────────
-    st.markdown("## DFV — Disponibilidad de capacidad fotovoltaica")
-    _dfv = ind_fv_f[ind_fv_f['indicador'] == 'IND-14'].sort_values('mes')
-    if not _dfv.empty:
-        _col_dfv = [_semaforo(v, 95, 80) for v in _dfv['valor_num']]
-        fig_dfv = go.Figure(go.Bar(
-            x=_dfv['mes'].astype(str), y=_dfv['valor_num'],
-            marker_color=_col_dfv, marker_line_width=0,
-            text=[f'{v:.1f}%' for v in _dfv['valor_num']],
-            textposition='outside', cliponaxis=False,
-            hovertemplate='%{x}: %{y:.1f}% de la capacidad monitoreada<extra></extra>',
-        ))
-        fig_dfv.add_hline(y=100, line_color=C_GRAY, line_dash='dot',
-                          annotation_text='100% = toda la capacidad generando',
-                          annotation_position='top right', annotation_font_color=C_GRAY)
-        fig_dfv.update_yaxes(range=[0, 118])
-        fig_dfv.update_layout(
-            title=dict(text='IND-14 — Capacidad FV monitoreada que realmente generó',
-                       font=dict(size=13), x=0),
-            xaxis_title='Mes', yaxis_title='% de kWp',
-        )
-        _chart(_layout_base(fig_dfv, h=320), use_container_width=True)
-        _ult = float(_dfv['valor_num'].iloc[-1])
-        st.caption(
-            f"Responde la pregunta que ningún otro indicador hacía: **¿está produciendo el "
-            f"equipo que tenemos?** Una planta caída no altera el factor de carga ni el "
-            f"desbalance — simplemente deja de aportar, en silencio. El umbral es relativo "
-            f"a la mejor planta del mismo mes, así que se ajusta solo al clima y no marca "
-            f"falsas alarmas en temporada de lluvias. Último valor: **{_ult:.1f}%** de la "
-            f"capacidad monitoreada. Se calcula sobre la capacidad con telemetría, no sobre "
-            f"la instalada del campus: de los kWp sin monitorear no se puede afirmar nada."
-        )
-    else:
-        st.info("IND-14 (DFV) sin datos para el rango seleccionado.")
 
     # ═══════════════════════════════════════════════════════════════════════
     # IND-15 a IND-20 — desviación, percentiles, participación y valor

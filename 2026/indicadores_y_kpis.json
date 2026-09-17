@@ -143,32 +143,6 @@
       "fuente": "Medidores Landis"
     },
     {
-      "id": "DFV",
-      "nombre": "Disponibilidad de capacidad fotovoltaica",
-      "formula": "DFV = Σ(kWp de plantas operativas) / Σ(kWp monitoreados) × 100. Una planta se considera operativa en el mes evaluado si IGS_planta >= 0,20 × IGS_referencia, donde IGS_referencia es el mayor IGS entre las plantas monitoreadas ese mismo mes.",
-      "explicacion": "Responde la pregunta que ningun otro indicador del catalogo hacia: ¿esta produciendo el equipo que tenemos? El umbral es RELATIVO y no absoluto a proposito: al compararse contra la mejor planta del mismo mes, se ajusta solo al clima y no marca falsas alarmas en temporada de lluvias. Una planta que rinde menos de un quinto que su vecina bajo el mismo sol no esta operando. Con los datos de 2026 este indicador habria disparado la alarma en FEBRERO, el mismo mes en que la planta se detuvo; el hallazgo real llego en septiembre, siete meses tarde.",
-      "variables": [
-        "energyproducedtoday"
-      ],
-      "fuente": "Fronius (etfroniusinverter) + Enphase (etenphaseinverter) + inventario plantas_fv",
-      "nota_alcance": "Se calcula solo sobre la capacidad MONITOREADA (102,95 kWp), no sobre la instalada del campus (138,37 kWp): de los ~35 kWp sin telemetria no se puede afirmar si producen o no. Declararlo en cada reporte.",
-      "validacion_2026": {
-        "alcance": "Calculado sobre la capacidad Fronius (98,05 kWp). Al integrar el Enphase (4,9 kWp, operativo) el denominador pasa a 102,95 kWp y el DFV estable a 55,9 %.",
-        "serie_mensual_pct": {
-          "2026-01": 100.0,
-          "2026-02": 53.7,
-          "2026-03": 53.7,
-          "2026-04": 53.7,
-          "2026-05": 53.7,
-          "2026-06": 53.7,
-          "2026-07": 53.7,
-          "2026-08": 53.7,
-          "2026-09": 53.7
-        },
-        "lectura": "Enero da 100 % porque solo tiene 2 dias observados y ambas plantas aun producian. Desde febrero el indicador se queda clavado en 53,7 % y no vuelve a subir: esa meseta plana es la firma de un activo caido, no de un mal mes."
-      }
-    },
-    {
       "id": "DDCE_H",
       "nombre": "Desviación del consumo esperado (horaria)",
       "formula": "DDCE_h [%] = (E_observada_h − E_esperada_h) / E_esperada_h × 100, con E_esperada_h = mediana de la energía del bloque en esa misma hora y tipo de día durante las 4 semanas previas",
@@ -488,7 +462,7 @@
     }
   ],
   "plantas_fv": {
-    "nota": "Inventario necesario para IND-08, IND-14 y KPI 06: cada uno divide por la potencia instalada, que es distinta en cada planta. Fuente de las capacidades: 'Reporte Maestro.xlsx', hoja 'Fichas tecnicas SFV'.",
+    "nota": "Inventario necesario para IND-08 y KPI 06: cada uno divide por la potencia instalada, que es distinta en cada planta. Fuente de las capacidades: 'Reporte Maestro.xlsx', hoja 'Fichas tecnicas SFV'.",
     "capacidad_campus_kwp": 138.37,
     "capacidad_monitoreada_kwp": 102.95,
     "advertencia_capacidad_campus": "El Reporte Maestro se contradice consigo mismo: su tabla dinamica suma 139,77 kWp y su tabla de datos 138,37 kWp (SFV51 aparece como 'Casa Habitat 2,4' en una y 'Ecovilla_Carport 1,0' en la otra). Se adopta 138,37 por venir de la tabla de datos, que es la que detalla sistema por sistema. Pendiente resolver con quien administra el activo.",

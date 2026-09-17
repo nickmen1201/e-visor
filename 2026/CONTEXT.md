@@ -41,7 +41,6 @@ Source of truth: `indicadores_y_kpis.json`. `PENDING` = no data yet; `dashboard.
 | IND-11 | Energy savings | `1 − (E_current / E_base)` | Δactiveenergyimport | PENDING (needs ≥12-mo baseline) |
 | IND-12 | VU — Voltage unbalance | `max(\|vₙ−v̄\|) / v̄ × 100` | v1, v2, v3 | REAL |
 | IND-13 | FD — Diversity Factor | `Σ max(P_i) / max(Σ P_i)` · i = each of the 16 meters · campus-level, needs timestamp alignment | activepower | REAL |
-| IND-14 | DFV — PV capacity availability | `Σ(kWp of operating plants) / Σ(kWp monitored) × 100` · a plant is operating in a month if `IGS_plant ≥ 0.20 × IGS_reference` (best plant that month) | energyproducedtoday + `plantas_fv` inventory | REAL |
 | IND-15 | DDCE_h — Expected-consumption deviation (hourly) | `(E_obs − E_exp) / E_exp × 100` · E_exp = median of the same hour **and day-type** over the previous 4 weeks | Δactiveenergyimport | REAL |
 | IND-16 | DDCE_d — Expected-consumption deviation (daily) | same formula on daily energy · feeds IND-19 | Δactiveenergyimport | REAL |
 | IND-17 | PCT — Load percentiles (P90 / P95) | `quantile(P, 0.90)` and `quantile(P, 0.95)` per block-month · descriptive band, no threshold, no traffic light | activepower | REAL |

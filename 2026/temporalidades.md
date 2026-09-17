@@ -24,7 +24,6 @@
 | **Ahorro** | Ahorro de energía | Mensual · por bloque | Sin umbral fijo | — | ⚠ PENDIENTE · requiere línea base ≥ 12 meses |
 | **VU** | Desbalance de tensión | Horaria → media diaria · por medidor | Objetivo < 2 % · alerta ≥ 3 % (directriz e-Visor, compartida con KPI 10) | Barra por bloque + barra diaria | Referencia: IEEE 1159:2019 · NTC 5001 |
 | **FD** | Factor de diversidad | Mensual · campus completo | Sin umbral fijo | Serie mensual de campus | Exige timestamps alineados entre los 16 medidores |
-| **DFV** | Disponibilidad de capacidad FV | Mensual · campus FV | Planta operativa si IGS ≥ 0,20 × IGS de referencia del mes | Serie mensual | Sobre capacidad MONITOREADA (102,95 kWp), no la instalada |
 | **DDCE_H** | Desviación del consumo esperado (horaria) | Horaria · por bloque | Sin umbral fijo · base móvil de 4 semanas del mismo tipo de día | Serie horaria + tarjeta de la última hora cargada | Esperado = mediana, no promedio · mínimo 3 observaciones de base |
 | **DDCE_D** | Desviación del consumo esperado (diaria) | Diaria · por bloque | Sin umbral fijo · base móvil de 4 semanas del mismo tipo de día | Barra diaria del bloque típico (mediana entre bloques) · el detalle nombra el bloque más alto y el más bajo | Alimenta a PERS |
 | **PCT** | Percentiles de carga (P90 / P95) | Mensual · por bloque | Descriptivo: sin umbral ni semáforo | Banda sobre el perfil de potencia | Mensual y no por hora del día: el esquema de salida no tiene esa dimensión |
@@ -60,7 +59,7 @@
 |---|---|
 | **Horaria** (detección de eventos) | VU · DDCE_H · KPI 10 · KPI 11 |
 | **Diaria** (diagnóstico operativo) | LF · PAR · f₁ · f₂ · f₃ · f₄ · CO₂ · DDCE_D · PERS · KPI 03 · KPI 08 · KPI 09 |
-| **Mensual** (reporte de gestión) | CO₂ (acum.) · Ahorro · FD · DFV · PCT · PART · VER · CSE · CORR_FS · KPI 05 · KPI 07 |
+| **Mensual** (reporte de gestión) | CO₂ (acum.) · Ahorro · FD · PCT · PART · VER · CSE · CORR_FS · KPI 05 · KPI 07 |
 | **Anual** (cumplimiento ESG) | KPI 01 · KPI 04 · KPI 05 (meta) |
 
 ---

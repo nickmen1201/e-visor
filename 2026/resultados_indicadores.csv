@@ -9864,15 +9864,6 @@ IND-09,"TCP — ΔT panel-ambiente (diario, G>200 W/m2)",FV_11C,2026-09-02,2026-
 IND-09,"TCP — ΔT panel-ambiente (diario, G>200 W/m2)",FV_11C,2026-09-03,2026-09,5.312375796003508,°C
 IND-09,"TCP — ΔT panel-ambiente (diario, G>200 W/m2)",FV_11C,2026-09-04,2026-09,4.4410353960910065,°C
 IND-09,"TCP — ΔT panel-ambiente (diario, G>200 W/m2)",FV_11C,2026-09-05,2026-09,4.364406487232575,°C
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-01,100.0,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-02,55.9009227780476,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-03,55.9009227780476,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-04,55.9009227780476,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-05,55.9009227780476,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-06,55.9009227780476,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-07,55.9009227780476,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-08,55.9009227780476,%
-IND-14,DFV — Disponibilidad de capacidad FV (mensual),CAMPUS_FV,,2026-09,55.9009227780476,%
 IND-10,EB — Eficiencia bateria — PENDIENTE: contador de descarga congelado,N/A,,N/A,PENDIENTE,N/A
 IND-11,Ahorro energia — PENDIENTE: linea base >= 12 meses,N/A,,N/A,PENDIENTE,N/A
 IND-12,Desbalance tension VU (horario),10,2026-01-30,2026-01,0.23600922795058693,%
