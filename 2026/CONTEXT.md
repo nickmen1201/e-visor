@@ -18,6 +18,7 @@ KPIs/indicators blocked by missing data are shown with plausible reference value
 - **Code:** tag every affected variable with `# DEMO_MODE: <reason> | ref=<value>`. Remove when real data arrives.
 - **Grafana:** amber/orange panel tint + `⚠ Valor de referencia` suffix in title + tooltip stating what's missing.
 - Goal: a stakeholder must never mistake a reference value for a real measured KPI.
+- **Tariff:** every COP figure (IND-20, the summary energy card, KPI 01 cost, KPI 09 night cost/savings) uses one reference tariff, `TARIFA_REF_COP_KWH = 600` COP/kWh, defined identically in the notebook and `dashboard.py`. It is not the UPB bill and no public EPM tariff is used anywhere; replace it only with the actual invoice.
 
 ---
 
@@ -85,7 +86,7 @@ Capacities come from `Reporte Maestro.xlsx` (sheet *Fichas técnicas SFV*).
 
 **KPI 06 scope.** Computable only for `fronius_plant_52kWp`, the only plant with a coplanar sensor. It cannot be extended to Enphase B10: azimuth 126° vs the sensor's 238–264° is a different plane of incidence. Only days with the full 06:00–18:00 daylight band are evaluated — one missing hour silently lowers RY and inflates PR.
 
-**The 45 kW finding (2026-09).** Two of its four inverters produced nothing in 7 months; the other two stopped on **13–14 Feb 2026**. It delivered 701.3 kWh (1.8 % of Fronius generation) while holding 46 % of its installed capacity. Gap vs. the healthy plant's yield: **31,531 kWh · ≈ $27.1 M COP · 3.06 tCO₂e**. Telemetry proves the *reported* output is zero, **not** the cause: inverters off/disconnected and broken telemetry are both consistent with the data, and only a site visit to Block 18 separates them. Always present both hypotheses — claiming the loss as fact and being wrong costs credibility on everything else.
+**The 45 kW finding (2026-09).** Two of its four inverters produced nothing in 7 months; the other two stopped on **13–14 Feb 2026**. It delivered 701.3 kWh (1.8 % of Fronius generation) while holding 46 % of its installed capacity. Gap vs. the healthy plant's yield: **31,531 kWh · ≈ $18.9 M COP (reference tariff 600 COP/kWh) · 3.06 tCO₂e**. Telemetry proves the *reported* output is zero, **not** the cause: inverters off/disconnected and broken telemetry are both consistent with the data, and only a site visit to Block 18 separates them. Always present both hypotheses — claiming the loss as fact and being wrong costs credibility on everything else.
 
 ---
 

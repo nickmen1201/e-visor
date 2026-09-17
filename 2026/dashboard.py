@@ -113,9 +113,11 @@ _BLOQUE_TO_ENTITY = {
     'Ecovilla': 'SmartMeter_SM_ECOVILLA',
 }
 
-TARIFA_BASE_COP_KWH   = 859.19
-TARIFA_INDCOM_COP_KWH = 1_031.03
-HOGAR_KWH_MES         = 130
+# DEMO_MODE: tarifa de referencia, NO la tarifa facturada a la UPB | ref=600 COP/kWh
+# Es la misma TARIFA_REF_COP_KWH del notebook (IND-20): toda cifra en COP del
+# tablero sale de aquí.
+TARIFA_REF_COP_KWH = 600.0
+HOGAR_KWH_MES      = 130
 
 UMBRAL_FP_OBJ   = 0.90
 UMBRAL_FP_ALERT = 0.85
@@ -1047,7 +1049,7 @@ with st.sidebar:
     )
     st.divider()
     st.caption("FE CO₂: 0.097018 tCO₂e/MWh (XM, 2026-01-30)")
-    st.caption("Tarifa EPM NT1 ene-2026: $859 COP/kWh")
+    st.caption(f"Tarifa de referencia: ${TARIFA_REF_COP_KWH:,.0f} COP/kWh (no facturada)")
 
 
 # ── Filtrado ──────────────────────────────────────────────────────────────────
@@ -1150,9 +1152,9 @@ _cards = []
 
 # Energía
 if total_kwh_campus:
-    _costo = total_kwh_campus * TARIFA_BASE_COP_KWH
+    _costo = total_kwh_campus * TARIFA_REF_COP_KWH
     _cards.append(_kpi_card('Energía consumida', f'{total_kwh_campus:,.0f}', 'kWh',
-                            spark=_sparkline_svg(_sp_en), foot=f'${_costo:,.0f} COP'))
+                            spark=_sparkline_svg(_sp_en), foot=f'${_costo:,.0f} COP de referencia'))
 else:
     _cards.append(_kpi_card('Energía consumida', '—'))
 
@@ -1836,7 +1838,7 @@ with tab_ind:
     # ── IND-20 — Valor económico de referencia [DEMO] ───────────────────────
     st.markdown("## Valor económico de referencia")
     st.warning(
-        "**DEMO — Valor de referencia:** tarifa de 600 COP/kWh, **no** la tarifa "
+        f"**DEMO — Valor de referencia:** tarifa de {TARIFA_REF_COP_KWH:,.0f} COP/kWh, **no** la tarifa "
         "facturada a la UPB. No incluye componentes variables ni contribución/exención. "
         "Sirve para dimensionar órdenes de magnitud, no para conciliar contra la factura."
     )
@@ -1937,19 +1939,19 @@ with tab_kpi:
         )
         _chart(fig_k1, use_container_width=True)
         total_kwh_campus = kpi01_f['e_wh'].sum() / 1_000
-        costo_cop      = total_kwh_campus * TARIFA_BASE_COP_KWH
+        costo_cop      = total_kwh_campus * TARIFA_REF_COP_KWH
         hogares_meses  = total_kwh_campus / HOGAR_KWH_MES
         cm1, cm2, cm3 = st.columns(3)
         cm1.metric("Energía consumida", f"{total_kwh_campus:,.0f} kWh")
-        cm2.metric("Costo estimado", f"${costo_cop:,.0f} COP",
-                   help="Tarifa EPM NT1 ene-2026: $859.19 COP/kWh")
+        cm2.metric("Costo de referencia", f"${costo_cop:,.0f} COP",
+                   help=f"Tarifa de referencia: ${TARIFA_REF_COP_KWH:,.0f} COP/kWh · no es la factura de la UPB")
         cm3.metric("Hogares equivalentes", f"{hogares_meses:,.0f} mes-hogar",
                    help=f"Referencia: {HOGAR_KWH_MES} kWh/mes estrato 1–2")
         st.info(
             f"En {periodo_dias} días el campus consumió **{total_kwh_campus:,.0f} kWh** "
             f"≡ {hogares_meses:,.0f} hogares un mes. "
             f"Costo de referencia: **${costo_cop:,.0f} COP** "
-            f"(EPM NT1 ene-2026 · $859 COP/kWh)."
+            f"(tarifa de referencia de ${TARIFA_REF_COP_KWH:,.0f} COP/kWh, no la factura de la UPB)."
         )
         st.caption(
             f"Umbrales dinámicos: objetivo = μ×0.93 = {umbral_objetivo_k1:.2f} kWh/m² · "
@@ -2271,14 +2273,15 @@ with tab_kpi:
     if total_kwh_campus is not None and total_kwh_campus > 0:
         pct_noche  = float(f4_bloque_k9.mean()) / 100
         e_noche    = total_kwh_campus * pct_noche
-        costo_noch = e_noche * TARIFA_BASE_COP_KWH
+        costo_noch = e_noche * TARIFA_REF_COP_KWH
         pct_exceso = max(0.0, pct_noche - umbral_objetivo_k9 / 100)
         ahorro_kwh = total_kwh_campus * pct_exceso
-        ahorro_cop = ahorro_kwh * TARIFA_BASE_COP_KWH
+        ahorro_cop = ahorro_kwh * TARIFA_REF_COP_KWH
 
         cn1, cn2, cn3 = st.columns(3)
         cn1.metric("Energía nocturna", f"{e_noche:,.0f} kWh")
-        cn2.metric("Costo nocturno", f"${costo_noch:,.0f} COP")
+        cn2.metric("Costo nocturno", f"${costo_noch:,.0f} COP",
+                   help=f"Tarifa de referencia: ${TARIFA_REF_COP_KWH:,.0f} COP/kWh · no es la factura de la UPB")
         if ahorro_cop > 0:
             cn3.metric("Ahorro potencial", f"${ahorro_cop:,.0f} COP",
                        delta=f"−{ahorro_kwh:,.0f} kWh", delta_color="inverse")

@@ -40,7 +40,7 @@
 
 | # | Nombre | Granularidad de cálculo | Ventana de umbral | Visualización en dashboard | Estado |
 |---|---|---|---|---|---|
-| **01** | Consumo por m² | Diaria · por bloque → acum. anual | Propio: media + 1σ por bloque | Barra por bloque (equiv. anual) | REAL |
+| **01** | Consumo por m² | Diaria · por bloque → acum. anual | Propio: media + 1σ por bloque | Barra por bloque (equiv. anual) | REAL · el costo en COP usa la tarifa de referencia de 600 COP/kWh (DEMO) |
 | **02** | Intensidad por usuario | Diaria → mensual · por bloque | Propio: media + 1σ · serie de campus | — | ⚠ DEMO · N_usuarios pendiente |
 | **03** | Pico de demanda | Diaria · por medidor | Propio: media + 1σ por bloque | Barra por bloque con umbral dinámico | REAL |
 | **04** | Ahorro verificado | Anual · por bloque | Sin umbral efectivo: la serie DEMO es constante (σ = 0) | — | ⚠ DEMO · requiere línea base 12 meses |
