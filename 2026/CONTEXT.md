@@ -23,7 +23,7 @@ KPIs/indicators blocked by missing data are shown with plausible reference value
 
 ## Indicators (diagnostic, hourly, per block — source: Landis `etsmartmeter` unless noted)
 
-Source of truth: `ecocampus_kpis_indicadores.json` (v `Indicadores_y_KPI_26_1_3`). `PENDING` = no data yet; `dashboard.py` renders these as amber "Indicadores en integración" cards.
+Source of truth: `indicadores_y_kpis.json`. `PENDING` = no data yet; `dashboard.py` renders these as amber "Indicadores en integración" cards.
 
 | ID | Name | Formula | Variables | Status |
 |---|---|---|---|---|
@@ -34,7 +34,7 @@ Source of truth: `ecocampus_kpis_indicadores.json` (v `Indicadores_y_KPI_26_1_3`
 | IND-05 | f₃ — Min-to-mean | `min(P_op) / mean(P_op)` | activepower | REAL |
 | IND-06 | f₄ — Non-op load factor | `mean(P_non_op) / mean(P_op)` · non_op=22:00–05:59 | activepower | REAL |
 | IND-07 | CO₂ emissions | `9.7018e-8 × Σ(E_day[Wh])` → tCO₂e · FE_2025=0.097018 tCO₂e/MWh (XM, 2026-01-30) ⚠ replace legacy 0.18 everywhere | Δactiveenergyimport | REAL |
-| IND-08 | IGS — PV Yield Factor | `Σ(E_pv_day) / P_installed` → kWh/kWp · **per plant, never a fleet average** | energyproducedtoday · source: `etfroniusinverter` + `etenphaseinverter` | REAL (kWp confirmed: 52.65 / 45.4 / 4.9) |
+| IND-08 | IGS — PV Yield Factor | `Σ(E_pv_day) / P_installed` → kWh/kWp · **per plant, never a fleet average** | energyproducedtoday · source: `etfroniusinverter` + `etenphaseinverter` | REAL (kWp: 52.65 / 45.4 inferred / 4.9) |
 | IND-09 | TCP — Panel temp delta | `mean(T_panel) − mean(T_ambient)` over hours with `G > 200 W/m²` | paneltemperature · ambienttemperature · source: Fronius sensor | REAL (γ still missing for the efficiency-loss extension) |
 | IND-10 | EB — Battery efficiency | `Σ(E_from_bat) / Σ(E_to_bat)` | energyfrombattery · energytobattery · source: `Inversor_Baterías` | PENDING |
 | IND-11 | Energy savings | `1 − (E_current / E_base)` | Δactiveenergyimport | PENDING (needs ≥12-mo baseline) |
@@ -100,8 +100,8 @@ Capacities come from `Reporte Maestro.xlsx` (sheet *Fichas técnicas SFV*).
 | 03 | Pico de demanda | kW + timestamp | `max(P)` per period per block · log date, hour and block | Propio: **media + 1σ** por bloque | 7,9 | Conscious leadership | Leaders + business | REAL | — |
 | 04 | Ahorro verificado | % | `[1 − Σ(E_act÷1000)/E_base_adj] × 100` · E_base_adj normalized by users+temp | — sin umbral: serie constante en DEMO (σ=0) | 7,9,13 | Regen & resilience | All groups | **DEMO** | No 12-mo baseline yet; awaiting EPM data for full-university consumption · ref=prior period×1.03 |
 | 05 | Emisiones CO₂ | tCO₂e | See IND-07 | Propio: **media + 1σ** por bloque | 7,13,17 | Regen & resilience | Public + community | REAL | ⚠ Replace 0.18 legacy FE everywhere · check whether UPB Sostenibilidad already owns this KPI |
-| 06 | Performance Ratio FV | % | `PR=(YF/RY)×100` · `YF=Σ(E_pv)/P_inst` · `RY=Σ(G×Δt)/1000` | Propio: **media + 1σ** — pendiente de datos | 7,9,13 | Regen & resilience | Academic + business | **DEMO** | `solarirradiation` is W/m² (instantaneous) and Fronius time resolution is undefined; kWp unconfirmed — **do not compute until resolved** · ref=PR 73% |
-| 07 | Autosuficiencia solar | % | `Σ(E_solar_self)/Σ(E_grid+E_solar_AC)×100` · if no export meter: `E_self≈energyproducedtoday` (conservative proxy, document it each run) | Propio: **media + 1σ** — pendiente de datos | 7,13,17 | Regen & resilience | Students + alumni | **DEMO** | `etinverterxw` export unconfirmed; kWp unconfirmed · ref=SS 12% |
+| 06 | Performance Ratio FV | % | `PR=(YF/RY)×100` · `YF=Σ(E_pv)/P_inst` · `RY=Σ(G×Δt)/1000` | Propio: **media − 1σ** por planta (más es mejor) | 7,9,13 | Regen & resilience | Academic + business | REAL | Only `fronius_plant_52kWp` (coplanar sensor) and only days with the full 06:00–18:00 band — see PV section |
+| 07 | Autosuficiencia solar | % | `Σ(E_solar_self)/Σ(E_grid+E_solar_AC)×100` · if no export meter: `E_self≈energyproducedtoday` (proxy that **overestimates** SS — declare it each run) | Propio: **media − 1σ** sobre la serie de campus (más es mejor) | 7,13,17 | Regen & resilience | Students + alumni | REAL | `etinverterxw` export unconfirmed → proxy · whole fleet, dead plants with their zero · denominator = the 16 Landis meters (none on Block 11): *measured campus*, not the university |
 | 08 | Load Factor | 0–1 | See IND-01 · denominator = max of the analysed period, NOT meter rating | Propio: **media − 1σ** por bloque (más es mejor) | 7,9 | Conscious leadership | Maintenance | REAL | — |
 | 09 | Consumo no operacional | % | `[Σ(E_22h-06h÷1000)/Σ(E_total÷1000)]×100` (=f₄ by energy) · non-op=22:00–05:59 | Propio: **media + 1σ** por bloque | 7,9 | Regen & resilience | Maintenance | REAL | — |
 | 10 | Desbalance de tensión | % | `[max(\|vₙ−v̄\|)/v̄]×100` | Fijo (directriz e-Visor): objetivo <2 % · alerta ≥3 % | 9 | Conscious leadership | Tech + labs | REAL | — |
@@ -110,9 +110,9 @@ Capacities come from `Reporte Maestro.xlsx` (sheet *Fichas técnicas SFV*).
 **KPI 12 (THD-V) was dropped** — not in the JSON spec nor in `dashboard.py`. `relativethdvoltage` is still cleaned and kept in the dataset if it is ever reinstated.
 
 
-**Threshold rule.** Only KPI 10 and KPI 11 carry fixed thresholds, set by e-Visor team directive; they are never recomputed from data. **Every other KPI derives its own** from the 12 months *preceding* the evaluated month (the month being judged is excluded from its own threshold): `alerta = media ± 1σ`, `objetivo = media` mejorada un 7 %, the sign chosen by the KPI's direction — `+1σ` when more is worse (01, 02, 03, 05, 09), `−1σ` when more is better (08). Grouping is per block over its monthly series, except KPI 02, which is campus-level. The 7 % improvement target is the only constant, and it comes from the project's own threshold protocol. No threshold value is written by hand.
+**Threshold rule.** Only KPI 10 and KPI 11 carry fixed thresholds, set by e-Visor team directive; they are never recomputed from data. **Every other KPI derives its own** from the 12 months *preceding* the evaluated month (the month being judged is excluded from its own threshold): `alerta = media ± 1σ`, `objetivo = media` mejorada un 7 %, the sign chosen by the KPI's direction — `+1σ` when more is worse (01, 02, 03, 05, 09), `−1σ` when more is better (04, 06, 07, 08). Grouping is per block over its monthly series (per plant for KPI 06), except KPI 02 and KPI 07, which are campus-level. The 7 % improvement target is the only constant, and it comes from the project's own threshold protocol. No threshold value is written by hand.
 
-Direction lives in exactly one place: the `higher_is_better` flag of `estado_icon()`, which `umbral_propio()` passes straight through. Do not reintroduce a second place that decides it.
+Direction lives in exactly one place: the `higher_is_better` flag of `estado_icon()`, which `umbral_movil()` passes straight through. Do not reintroduce a second place that decides it.
 
 Below `n_min = 4` months of base, no verdict is issued: the state is `SIN_BASE`. Every evaluated row carries `n_base`, `ventana_desde`, `ventana_hasta` and `base_completa` so the judgment can be reproduced. `umbral_movil(..., ventana_fija=('2026-01','2026-12'))` freezes the baseline instead of rolling it, for when the first full cycle closes.
 
