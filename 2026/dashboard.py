@@ -1637,104 +1637,72 @@ with tab_ind:
     # ── IND-16 — DDCE diaria ────────────────────────────────────────────────
     st.markdown("## DDCE — Desviación del consumo esperado (diaria)")
     _d16 = _dev('IND-16').dropna(subset=['valor_num'])
+    # El IND-19 se lee aquí para ordenar el selector: primero los bloques con más
+    # días por encima en la última semana evaluada, que son los que hay que mirar
+    _d19 = _dev('IND-19')
     if not _d16.empty:
-        # Por bloque, nunca agregado: la desviación de cada bloque se mide contra
-        # su propia base, y resumirlas en un "bloque típico" esconde justo al que
-        # se desvía. B9 va como SFA1 y SFA2, igual que el IND-19 al que alimenta.
-        _frac16 = (_d16.assign(_sobre=_d16['valor_num'] > 0)
-                   .groupby('bloque_lbl')['_sobre'].agg(['sum', 'count']))
-        _frac16['frac'] = _frac16['sum'] / _frac16['count']
-        # El que más días cerró por encima arriba (Plotly pinta la 1.ª fila abajo)
-        _frac16 = _frac16.sort_values(['frac', 'sum'])
-        _TOPE16 = 50.0
-        if len(_frac16) > 1:
-            _piv16 = (_d16.pivot_table(index='bloque_lbl', columns='fecha',
-                                       values='valor_num', aggfunc='mean')
-                      .reindex(_frac16.index))
-            # Malla diaria completa: sin ella Plotly estira las celdas vecinas sobre
-            # los días sin datos (Semana Santa) y parecen días evaluados
-            _piv16 = _piv16.reindex(columns=pd.date_range(_piv16.columns.min(),
-                                                          _piv16.columns.max(), freq='D'))
-            # El color satura en ±50 %: la desviación relativa no tiene techo
-            # (hay días de +300 %) y sin tope unos pocos días lavarían el resto
-            # del mapa a neutro. El detalle muestra el valor real.
-            _lbl16 = [f"{b}  ·  {int(r['sum'])}/{int(r['count'])}"
-                      for b, r in _frac16.iterrows()]
-            fig16 = go.Figure(go.Heatmap(
-                z=_piv16.clip(-_TOPE16, _TOPE16).values, x=_piv16.columns, y=_lbl16,
-                customdata=np.dstack([_piv16.values,
-                                      np.repeat(np.array(_frac16.index)[:, None],
-                                                _piv16.shape[1], axis=1)]),
-                zmin=-_TOPE16, zmax=_TOPE16, zmid=0, hoverongaps=False,
-                # El cero en gris claro, no en blanco: el blanco es 'día sin evaluar'
-                colorscale=[[0.0, C_BLUE], [0.5, '#E4E7EC'], [1.0, C_RED]],
-                xgap=1, ygap=2,
-                colorbar=dict(title=dict(text='desviación', font=dict(size=11, color=INK2)),
-                              tickfont=dict(size=10, color=INK2), thickness=12,
-                              tickvals=[-50, -25, 0, 25, 50],
-                              ticktext=['≤ −50 %', '−25 %', '0', '+25 %', '≥ +50 %']),
-                hovertemplate=('<b>%{customdata[1]}</b> · %{x|%a %d %b}: '
-                               '%{customdata[0]:+.1f} % sobre lo esperado<extra></extra>'),
-            ))
-            fig16.update_layout(
-                title=dict(text='IND-16 — Desviación diaria sobre lo esperado, por bloque',
-                           font=dict(size=13), x=0),
-                xaxis_title='Fecha', yaxis_title='',
-            )
-            fig16.update_yaxes(rangemode='normal')
-            _layout_base(fig16, h=max(320, 26 * len(_piv16) + 140))
-            # Margen a la medida de la etiqueta más larga ('Ecovilla  ·  46/95')
-            fig16.update_layout(plot_bgcolor=SURFACE,
-                                margin=dict(l=max(64, 7 * max(map(len, _lbl16)) + 16)))
-            _chart(fig16, use_container_width=True)
+        # Un bloque a la vez y en barras: la desviación se lee por altura contra el
+        # cero. El mapa de calor de todos los bloques por todos los días pedía leer
+        # 1 600 celdas contra una leyenda de color, casi todas ruido de ±10 %.
+        # B9 va como SFA1 y SFA2, igual que el IND-19 al que alimenta.
+        _bloques16 = sorted(_d16['bloque_lbl'].unique())
+        if not _d19.empty:
+            _rank16 = (_d19[_d19['fecha'] == _d19['fecha'].max()]
+                       .set_index('bloque_lbl')['valor_num'])
+            _bloques16.sort(key=lambda b: -_rank16.get(b, -1))
+        if len(_bloques16) > 1:
+            _b16 = st.selectbox(
+                'Bloque', _bloques16, key='sel_ind16',
+                help='Van primero los bloques con más días por encima de lo esperado '
+                     'en la última semana evaluada (IND-19).')
         else:
-            # Un solo medidor: una fila de mapa de calor se lee peor que barras
-            _s16 = _d16.set_index('fecha')['valor_num'].sort_index()
-            fig16 = go.Figure(go.Bar(
-                x=_s16.index, y=_s16.values,
-                marker_color=[C_RED if v > 0 else C_BLUE for v in _s16.values],
-                marker_line_width=0,
-                hovertemplate='<b>%{x|%a %d %b}</b>: %{y:+.1f} %<extra></extra>',
-            ))
-            fig16.add_hline(y=0, line_color=C_GRAY, line_width=1.5)
-            fig16.update_layout(
-                title=dict(text=f'IND-16 — Desviación diaria sobre lo esperado · '
-                                f'{_frac16.index[0]}',
-                           font=dict(size=13), x=0),
-                xaxis_title='', yaxis_title='Desviación (%)', bargap=0.25,
-            )
-            fig16.update_yaxes(rangemode='normal', ticksuffix=' %')
-            _chart(_layout_base(fig16, h=320), use_container_width=True)
+            _b16 = _bloques16[0]
+        _s16 = (_d16[_d16['bloque_lbl'] == _b16]
+                .groupby('fecha')['valor_num'].mean().sort_index())
 
-        # Con un esperado de mediana, lo neutro es ~50 % de días arriba. Si un
-        # bloque se aleja, su consumo cambia más rápido que su base de 4 semanas
-        _sube16 = _frac16[_frac16['frac'] > 0.6].index[::-1].tolist()
-        _baja16 = _frac16[_frac16['frac'] < 0.4].index.tolist()
-        _lect16 = []
-        if _sube16:
-            _lect16.append(f"Por encima en más del 60 % de sus días (el consumo sube más "
-                           f"rápido que su base): **{', '.join(_sube16)}**.")
-        if _baja16:
-            _lect16.append(f"Por debajo en más del 60 % (viene bajando): "
-                           f"**{', '.join(_baja16)}**.")
-        if not _lect16:
-            _lect16.append("Ningún bloque se aparta de lo neutro (entre 40 % y 60 % de días "
-                           "por encima).")
-        _top16 = ', '.join(
-            f"{r['bloque_lbl']} el {pd.Timestamp(r['fecha']):%d/%m} ({r['valor_num']:+.0f} %)"
-            for _, r in _d16.nlargest(3, 'valor_num').iterrows())
+        # La desviación relativa no tiene techo (hay días de +300 %): pasado ±60 %
+        # la barra se corta en el borde y lleva su valor escrito, para que un solo
+        # día no aplaste al resto contra el cero
+        _TOPE16 = 60.0
+        _lim16 = min(_TOPE16, max(20.0, float(np.ceil(_s16.abs().max() / 10.0) * 10.0)))
+        fig16 = go.Figure(go.Bar(
+            x=_s16.index, y=_s16.clip(-_lim16, _lim16).values, customdata=_s16.values,
+            marker_color=np.where(_s16.values > 0, C_RED, C_BLUE), marker_line_width=0,
+            hovertemplate='<b>%{x|%a %d %b}</b>: %{customdata:+.1f} % sobre lo esperado'
+                          '<extra></extra>',
+        ))
+        _fuera16 = _s16[_s16.abs() > _lim16]
+        if not _fuera16.empty:
+            fig16.add_trace(go.Scatter(
+                x=_fuera16.index, y=np.sign(_fuera16.values) * _lim16, mode='text',
+                text=[f'{v:+.0f} %' for v in _fuera16.values],
+                textposition=['top center' if v > 0 else 'bottom center'
+                              for v in _fuera16.values],
+                textfont=dict(size=10, color=INK2), hoverinfo='skip', showlegend=False,
+            ))
+        fig16.add_hline(y=0, line_color=INK2, line_width=1)
+        fig16.update_layout(
+            title=dict(text=f'IND-16 — Desviación diaria sobre lo esperado · {_b16}',
+                       font=dict(size=13), x=0),
+            xaxis_title='', yaxis_title='Desviación sobre lo esperado',
+            bargap=0.2, showlegend=False,
+        )
+        fig16.update_yaxes(range=[-_lim16 * 1.15, _lim16 * 1.15], ticksuffix=' %',
+                           zeroline=False)
+        _chart(_layout_base(fig16, h=340), use_container_width=True)
+
+        _arriba16 = int((_s16 > 0).sum())
         st.caption(
-            "Mismo contraste que el horario, con el día ya cerrado y cada bloque contra su "
-            "propia base. Rojo es gastar más de lo esperado, azul menos; el color satura en "
-            "±50 % y el detalle da el valor real. "
-            + ("La cifra junto a cada bloque es cuántos de sus días evaluados cerraron por "
-               "encima, y los bloques van ordenados por esa proporción. "
-               if len(_frac16) > 1 else "")
-            + "Con un esperado de mediana lo neutro es cerca de la mitad. "
-            + ' '.join(_lect16)
-            + f" Los días más altos: {_top16}. Las celdas vacías son días que no se "
-            "evalúan — sin datos, con menos de 24 horas cargadas (cortes de ingesta) o sin "
-            "base suficiente. B9 aparece como sus dos submedidores, igual que en el IND-19."
+            f"Cada barra es un día cerrado de **{_b16}** comparado con la mediana de sus "
+            f"días del mismo tipo (hábil, sábado o domingo-festivo) en las 4 semanas "
+            f"previas. Hacia arriba gastó más de lo esperado; hacia abajo, menos. En el "
+            f"rango, **{_arriba16} de {len(_s16)} días** cerraron por encima — con un "
+            f"esperado de mediana lo normal es cerca de la mitad. El día más alto fue el "
+            f"**{_s16.idxmax():%d/%m}** ({_s16.max():+.0f} %)."
+            + (f" Los días que pasan de ±{_lim16:.0f} % se cortan en el borde y llevan "
+               f"su valor escrito." if not _fuera16.empty else "")
+            + " Los huecos son días que no se evalúan: sin datos, con menos de 24 horas "
+            "cargadas (cortes de ingesta) o sin base suficiente."
         )
     else:
         st.info("IND-16 (DDCE diaria) sin datos para el rango seleccionado.")
@@ -1810,38 +1778,99 @@ with tab_ind:
 
     # ── IND-19 — Persistencia de la desviación ──────────────────────────────
     st.markdown("## Persistencia de la desviación")
-    _d19 = _dev('IND-19')
     if not _d19.empty:
-        _piv19 = _d19.pivot_table(index='bloque_lbl', columns='fecha',
-                                  values='valor_num', aggfunc='mean')
-        _piv19 = _piv19.loc[_piv19.mean(axis=1).sort_values().index]
-        fig19 = go.Figure(go.Heatmap(
-            z=_piv19.values, x=_piv19.columns, y=_piv19.index,
-            zmin=0, zmax=7,
-            colorscale=[[0.0, '#F2F5FA'], [0.5, '#7FA4D0'], [1.0, C_RED]],
-            colorbar=dict(title=dict(text='días', font=dict(size=11, color=INK2)),
-                          tickfont=dict(size=10, color=INK2),
-                          tickvals=[0, 1, 2, 3, 4, 5, 6, 7], thickness=12),
-            hovertemplate='%{y} · %{x|%d %b}: %{z:.0f} de 7 días<extra></extra>',
+        # Es un indicador de estado: se muestra la última semana evaluada del rango,
+        # día por día. Los puntos son el signo del IND-16 de cada día y la cifra de
+        # la derecha es el IND-19 publicado; cuentan lo mismo. El mapa de calor de
+        # ventanas solapadas teñía 7 celdas por cada día alto y estiraba las celdas
+        # sobre los días sin datos (Semana Santa), pintando ventanas inexistentes.
+        _V19 = 7
+        _fin19 = _d19['fecha'].max()
+        _dias19 = pd.date_range(_fin19 - pd.Timedelta(days=_V19 - 1), _fin19, freq='D')
+        # Del IND-16 sin recortar por fechas: si el rango empieza a mitad de la
+        # semana, los primeros días igual cuentan en la ventana
+        _sig19 = (ind_dev[(ind_dev['indicador'] == 'IND-16')
+                          & ind_dev['entity_id'].isin(ind_dev_f['entity_id'].unique())
+                          & ind_dev['fecha'].isin(_dias19)]
+                  .pivot_table(index='bloque_lbl', columns='fecha', values='valor_num',
+                               aggfunc='mean')
+                  .reindex(columns=_dias19))
+        _val19 = (_d19[_d19['fecha'] == _fin19]
+                  .groupby('bloque_lbl')['valor_num'].first())
+        # Los que están en racha arriba; los de ventana incompleta al final
+        _bl19 = sorted(_d19['bloque_lbl'].unique(),
+                       key=lambda b: (-_val19.get(b, -1), b))
+        _sig19 = _sig19.reindex(_bl19)
+
+        _DSEM = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom']
+        _xlbl19 = [f'{_DSEM[d.weekday()]} {d.day}' for d in _dias19]
+        _px, _py, _sym, _col, _siz, _hov = [], [], [], [], [], []
+        for _b in _bl19:
+            _racha = _val19.get(_b, 0) >= 6
+            for _d, _xl in zip(_dias19, _xlbl19):
+                _v = _sig19.at[_b, _d]
+                _px.append(_xl)
+                _py.append(_b)
+                if pd.isna(_v):
+                    _sym.append('circle'); _siz.append(5); _col.append(BORDER)
+                    _hov.append(f'<b>{_b}</b> · {_d:%d/%m}: sin evaluar')
+                else:
+                    _sym.append('circle' if _v > 0 else 'circle-open')
+                    _siz.append(15)
+                    _col.append(C_RED if _racha else C_GRAY)
+                    _hov.append(f'<b>{_b}</b> · {_d:%d/%m}: {_v:+.1f} % sobre lo esperado')
+        fig19 = go.Figure(go.Scatter(
+            x=_px, y=_py, mode='markers', hovertext=_hov, hoverinfo='text',
+            marker=dict(symbol=_sym, size=_siz, color=_col, line=dict(width=2, color=_col)),
+            showlegend=False,
         ))
+        for _b in _bl19:
+            _v = _val19.get(_b)
+            if pd.isna(_v):
+                _txt, _c = 'incompleta', INK2
+            elif _v >= 6:
+                _txt, _c = f'<b>{_v:.0f} de 7</b>', C_RED
+            else:
+                _txt, _c = f'{_v:.0f} de 7', INK2
+            fig19.add_annotation(x=1, xref='paper', xanchor='left', xshift=14, y=_b,
+                                 text=_txt, showarrow=False,
+                                 font=dict(size=12, color=_c))
         fig19.update_layout(
-            title=dict(text='IND-19 — Días por encima de lo esperado en los últimos 7',
+            title=dict(text=f'IND-19 — Días por encima de lo esperado · '
+                            f'{_dias19[0]:%d/%m} al {_fin19:%d/%m}',
                        font=dict(size=13), x=0),
-            xaxis_title='Fecha', yaxis_title='',
+            width=620, plot_bgcolor=SURFACE,
         )
-        fig19.update_yaxes(rangemode='normal')
-        _chart(_layout_base(fig19, h=max(320, 26 * len(_piv19) + 140)),
-               use_container_width=True)
-        _max19 = float(_d19['valor_num'].max())
+        fig19.update_xaxes(type='category', categoryorder='array', categoryarray=_xlbl19,
+                           side='top', showgrid=False, showline=False, ticks='')
+        fig19.update_yaxes(type='category', categoryorder='array',
+                           categoryarray=_bl19[::-1], showgrid=False, showline=False,
+                           ticks='')
+        _layout_base(fig19, h=30 * len(_bl19) + 110)
+        fig19.update_layout(margin=dict(t=80, b=16, l=80, r=100))
+        _chart(fig19, use_container_width=False)
+
+        _en19 = [b for b in _bl19 if _val19.get(b, 0) >= 6]
+        if _en19:
+            _lect19 = (f"Esta semana {'está' if len(_en19) == 1 else 'están'} en racha "
+                       f"**{', '.join(_en19)}**.")
+            if len(_en19) >= 3:
+                _lect19 += (" Cuando varios bloques entran en racha a la vez, la causa "
+                            "puede ser común al campus (calendario académico, clima) y no "
+                            "propia de un bloque.")
+        else:
+            _lect19 = "Esta semana ningún bloque está en racha."
         st.caption(
-            f"Cuántos de los últimos 7 días el bloque cerró por encima de lo esperado. Como "
-            f"el esperado es una mediana, lo neutro es 3 o 4: por azar, 5 o más de 7 pasa en "
-            f"cerca de una de cada cuatro ventanas, así que solo las rachas de **6 o 7 días** "
-            f"apuntan a un cambio sostenido. El máximo alcanzado en el período es "
-            f"**{_max19:.0f} de 7 días**. Solo se "
-            f"pintan ventanas completas — un día sin base suficiente en el DDCE no cuenta "
-            f"como día normal, sale del numerador y del denominador — así que el "
-            f"denominador siempre es 7 y las celdas son comparables entre sí."
+            "Cada punto es un día de la última semana evaluada del rango: **relleno** si "
+            "el bloque cerró por encima de lo esperado (IND-16), **vacío** si cerró por "
+            "debajo y un punto pequeño si ese día no se evaluó. La cifra de la derecha es "
+            "el indicador: cuántos de los 7 días fueron por encima. Como el esperado es "
+            "una mediana, lo normal es 3 o 4; **6 o 7 de 7** es una racha y apunta a un "
+            "cambio sostenido — esos bloques van arriba y en rojo. "
+            + _lect19
+            + " *Incompleta* quiere decir que algún día de la semana no se pudo evaluar: "
+            "el indicador solo se publica con los 7 días. Para ver una semana anterior, "
+            "mueve la fecha de fin del rango."
         )
     else:
         st.info("IND-19 (persistencia) sin datos para el rango seleccionado.")
